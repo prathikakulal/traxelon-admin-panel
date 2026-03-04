@@ -1,8 +1,8 @@
 // src/views/ActivityView.jsx
 import { useState, useEffect } from 'react'
-import { Search, Calendar } from 'lucide-react'
+import { Search, Calendar, Trash2 } from 'lucide-react'
 import { db } from '../firebase/config.js'
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { collection, onSnapshot, doc, deleteDoc, query, orderBy } from 'firebase/firestore'
 import { SBadge, fmt } from '../components/UI.jsx'
 import { P } from '../styles/theme.js'
 
@@ -19,6 +19,12 @@ export default function ActivityView() {
     )
     return unsub
   }, [])
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this activity log permanently?')) return
+    try { await deleteDoc(doc(db, 'activityLogs', id)) }
+    catch (e) { console.error(e.message) }
+  }
 
   const filtered = logs.filter(l => {
     if (filter !== 'all' && l.type !== filter) return false
@@ -46,7 +52,7 @@ export default function ActivityView() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${P.border}` }}>
-                {['Event', 'Officer', 'Email', 'Date & Time', 'IP / Device'].map(h => (
+                {['Event', 'Officer', 'Email', 'Date & Time', 'IP / Device', ''].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, color: P.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -71,10 +77,20 @@ export default function ActivityView() {
                   <td style={{ padding: '12px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: P.muted }}>
                     {log.ip || '—'}{log.device ? ` · ${log.device}` : ''}
                   </td>
+                  <td style={{ padding: '12px 14px' }}>
+                    <button
+                      className="aib"
+                      style={{ color: P.red }}
+                      title="Delete log"
+                      onClick={() => handleDelete(log.id)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No activity logs yet</td></tr>
+                <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No activity logs yet</td></tr>
               )}
             </tbody>
           </table>
