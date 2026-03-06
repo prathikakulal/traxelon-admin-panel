@@ -7,9 +7,9 @@ import { SBadge, fmt } from '../components/UI.jsx'
 import { P } from '../styles/theme.js'
 
 export default function ActivityView() {
-  const [logs, setLogs]     = useState([])
+  const [logs, setLogs] = useState([])
   const [filter, setFilter] = useState('all')
-  const [q, setQ]           = useState('')
+  const [q, setQ] = useState('')
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -99,3 +99,5 @@ export default function ActivityView() {
     </div>
   )
 }
+
+//hello
