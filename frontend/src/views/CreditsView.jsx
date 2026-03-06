@@ -1,12 +1,13 @@
 // src/views/CreditsView.jsx
 import { useState } from 'react'
-import { Search, Zap, Plus, Minus } from 'lucide-react'
+import { Search, Zap, Plus, Minus, Trash2 } from 'lucide-react'
 import { P } from '../styles/theme.js'
 
-export default function CreditsView({ officers, onAddCredit, onDeductCredit }) {
+export default function CreditsView({ officers, onAddCredit, onDeductCredit, onDelete }) {
   const [q, setQ]       = useState('')
   const [bulk, setBulk] = useState('')
   const [amt, setAmt]   = useState({})
+  const [ded, setDed]   = useState({})
 
   const approved = officers.filter(o => o.status === 'approved' && !o.isAdmin).filter(o =>
     (o.displayName || '').toLowerCase().includes(q.toLowerCase()) ||
@@ -15,6 +16,8 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+      {/* Bulk grant */}
       <div className="atc" style={{ padding: 20 }}>
         <div style={{ fontFamily: "'Bebas Neue',cursive", fontSize: 20, color: P.txt, letterSpacing: 1, marginBottom: 12 }}>
           BULK GRANT <span style={{ color: P.cyan }}>CREDITS</span>
@@ -37,6 +40,7 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit }) {
         </div>
       </div>
 
+      {/* Per-officer table */}
       <div className="atc" style={{ overflow: 'hidden' }}>
         <div style={{ padding: '14px 18px', borderBottom: `1px solid ${P.border}` }}>
           <div style={{ position: 'relative', maxWidth: 300 }}>
@@ -48,7 +52,7 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${P.border}` }}>
-                {['Officer', 'Email', 'Credits', 'Add Amount', 'Actions'].map(h => (
+                {['Officer', 'Email', 'Credits', 'Add', 'Deduct', ''].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, color: P.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -56,22 +60,79 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit }) {
             <tbody>
               {approved.map(o => (
                 <tr key={o.uid} className="atr" style={{ borderBottom: `1px solid ${P.border}18` }}>
+
+                  {/* Officer name */}
                   <td style={{ padding: '12px 14px', fontSize: 13, color: P.txt }}>{o.displayName || '—'}</td>
+
+                  {/* Email */}
                   <td style={{ padding: '12px 14px', fontSize: 11, color: P.muted, fontFamily: "'JetBrains Mono',monospace" }}>{o.email}</td>
-                  <td style={{ padding: '12px 14px' }}><span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 22, color: P.cyan, fontWeight: 700 }}>{o.credits ?? 0}</span></td>
+
+                  {/* Current credits */}
                   <td style={{ padding: '12px 14px' }}>
-                    <input type="number" min="1" placeholder="Amt" value={amt[o.uid] || ''} onChange={e => setAmt(p => ({ ...p, [o.uid]: e.target.value }))} className="ati" style={{ width: 72, padding: '5px 8px' }} />
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 22, color: P.cyan, fontWeight: 700 }}>{o.credits ?? 0}</span>
                   </td>
+
+                  {/* Add credits — input + button */}
                   <td style={{ padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="abtn abtn-p" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => { onAddCredit(o.uid, parseInt(amt[o.uid] || 1)); setAmt(p => ({ ...p, [o.uid]: '' })) }}><Plus size={12} /> Add</button>
-                      <button className="abtn abtn-r" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => onDeductCredit(o.uid)}><Minus size={12} /> −1</button>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        type="number" min="1" placeholder="Amt"
+                        value={amt[o.uid] || ''}
+                        onChange={e => setAmt(p => ({ ...p, [o.uid]: e.target.value }))}
+                        className="ati" style={{ width: 72, padding: '5px 8px' }}
+                      />
+                      <button
+                        className="abtn abtn-p"
+                        style={{ padding: '5px 12px', fontSize: 12 }}
+                        onClick={() => {
+                          onAddCredit(o.uid, parseInt(amt[o.uid] || 1))
+                          setAmt(p => ({ ...p, [o.uid]: '' }))
+                        }}
+                      >
+                        <Plus size={12} /> Add
+                      </button>
                     </div>
                   </td>
+
+                  {/* Deduct credits — input + button, same style as Add */}
+                  <td style={{ padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        type="number" min="1" placeholder="Amt"
+                        value={ded[o.uid] || ''}
+                        onChange={e => setDed(p => ({ ...p, [o.uid]: e.target.value }))}
+                        className="ati" style={{ width: 72, padding: '5px 8px' }}
+                      />
+                      <button
+                        className="abtn abtn-r"
+                        style={{ padding: '5px 12px', fontSize: 12 }}
+                        onClick={() => {
+                          const n = parseInt(ded[o.uid] || 1)
+                          for (let i = 0; i < n; i++) onDeductCredit(o.uid)
+                          setDed(p => ({ ...p, [o.uid]: '' }))
+                        }}
+                      >
+                        <Minus size={12} /> Deduct
+                      </button>
+                    </div>
+                  </td>
+
+                  {/* Delete officer */}
+                  <td style={{ padding: '12px 14px' }}>
+                    <button
+                      className="aib"
+                      style={{ color: P.red }}
+                      title="Delete officer"
+                      onClick={() => onDelete(o.uid)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
+
                 </tr>
               ))}
               {approved.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No approved officers yet</td></tr>
+                <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No approved officers yet</td></tr>
               )}
             </tbody>
           </table>

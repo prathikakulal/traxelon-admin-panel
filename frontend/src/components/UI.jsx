@@ -1,5 +1,5 @@
 // src/components/UI.jsx
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { CheckCircle2, AlertTriangle } from 'lucide-react'
 import { P } from '../styles/theme.js'
 
@@ -52,13 +52,31 @@ export function Toast({ msg, ok, onClose }) {
   )
 }
 
-export function StatCard({ icon: Icon, label, value, color = P.cyan }) {
+export function StatCard({ icon: Icon, label, value, color = P.cyan, onClick }) {
+  const [hovered, setHovered] = useState(false)
+  const clickable = !!onClick
+
   return (
-    <div className="atc" style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
+    <div
+      className="atc"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 16,
+        cursor: clickable ? 'pointer' : 'default',
+        transition: 'border-color .15s, transform .15s, box-shadow .15s',
+        borderColor: clickable && hovered ? `${color}60` : undefined,
+        transform: clickable && hovered ? 'translateY(-2px)' : 'translateY(0)',
+        boxShadow: clickable && hovered ? `0 6px 24px ${color}18` : undefined,
+      }}
+    >
       <div style={{
         width: 44, height: 44, borderRadius: 10,
-        background: `${color}15`, border: `1px solid ${color}30`,
+        background: clickable && hovered ? `${color}25` : `${color}15`,
+        border: `1px solid ${color}30`,
         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        transition: 'background .15s',
       }}>
         <Icon size={20} color={color} />
       </div>

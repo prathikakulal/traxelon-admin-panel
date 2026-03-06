@@ -106,10 +106,10 @@ export default function AdminPage() {
     catch (e) { showToast(e.message, false) }
   }
 
-  const handleDeductCredit = async (uid) => {
+  const handleDeductCredit = async (uid, amount = 1) => {
     const o = officers.find(x => x.uid === uid)
-    if ((o?.credits || 0) < 1) { showToast('No credits to deduct', false); return }
-    try { await updateDoc(doc(db, 'users', uid), { credits: increment(-1) }); showToast('1 credit deducted') }
+    if ((o?.credits || 0) < amount) { showToast('Not enough credits to deduct', false); return }
+    try { await updateDoc(doc(db, 'users', uid), { credits: increment(-amount) }); showToast(`−${amount} credit${amount > 1 ? 's' : ''} deducted`) }
     catch (e) { showToast(e.message, false) }
   }
 
@@ -151,10 +151,10 @@ export default function AdminPage() {
   }
 
   const views = {
-    overview: <OverviewView officers={officers} links={links} />,
+    overview: <OverviewView officers={officers} links={links} setTab={setTab} />,
     officers: <OfficersView officers={officers} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
     links:    <LinksView links={links} />,
-    credits:  <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} />,
+    credits:  <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
     coupons:  <CouponsView showToast={showToast} />,
     activity: <ActivityView />,
     payments: <PaymentsView showToast={showToast} />,
