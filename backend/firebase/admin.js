@@ -36,7 +36,7 @@ function getAdmin() {
 
     admin.initializeApp({
         credential,
-        projectId: process.env.FIREBASE_PROJECT_ID,
+        projectId: process.env.FIREBASE_PROJECT_ID ? process.env.FIREBASE_PROJECT_ID.trim() : undefined,
     })
 
     return admin
