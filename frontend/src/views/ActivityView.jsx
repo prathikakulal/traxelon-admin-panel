@@ -11,20 +11,28 @@ export default function ActivityView() {
   const [filter, setFilter] = useState('all')
   const [q, setQ] = useState('')
 
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, 'activityLogs'), orderBy('timestamp', 'desc'), limit(100)),
-      snap => setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      err => console.error('activityLogs:', err.message)
-    )
-    return unsub
-  }, [])
+  const [loading, setLoading] = useState(true)
+  
+  const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this activity log permanently?')) return
-    try { await deleteDoc(doc(db, 'activityLogs', id)) }
-    catch (e) { console.error(e.message) }
-  }
+  useEffect(() => {
+    let mounted = true
+    const fetchActivity = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`${API}/api/admin/activity`)
+        if (!res.ok) throw new Error('Failed to fetch activity logs')
+        const data = await res.json()
+        if (mounted) setLogs(data)
+      } catch (err) {
+        console.error('activityLogs error:', err.message)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    fetchActivity()
+    return () => { mounted = false }
+  }, [API])
 
   const filtered = logs.filter(l => {
     if (filter !== 'all' && l.type !== filter) return false
@@ -78,18 +86,14 @@ export default function ActivityView() {
                     {log.ip || '—'}{log.device ? ` · ${log.device}` : ''}
                   </td>
                   <td style={{ padding: '12px 14px' }}>
-                    <button
-                      className="aib"
-                      style={{ color: P.red }}
-                      title="Delete log"
-                      onClick={() => handleDelete(log.id)}
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    {/* Deleting session logs is disabled to maintain strict audit trails */}
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {loading && (
+                <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.cyan, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>Loading sessions...</td></tr>
+              )}
+              {!loading && filtered.length === 0 && (
                 <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No activity logs yet</td></tr>
               )}
             </tbody>

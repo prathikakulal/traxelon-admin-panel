@@ -170,7 +170,7 @@ export default function AdminPage() {
         backgroundImage: 'linear-gradient(rgba(0,212,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.02) 1px,transparent 1px)',
         backgroundSize: '40px 40px',
       }}>
-        
+
         {/* MOBILE OVERLAY */}
         <div className={`mobile-overlay ${sideOpen ? 'open' : ''}`} onClick={() => setSideOpen(false)}></div>
 
