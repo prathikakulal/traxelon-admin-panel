@@ -114,6 +114,38 @@ router.get('/activity', async (_req, res) => {
   }
 })
 
+// ── DELETE /api/admin/activity/:uid/:sessionId/:type ──────────────────────────
+// Removes either the loginAt or logoutAt field, and deletes the document if empty
+router.delete('/activity/:uid/:sessionId/:type', async (req, res) => {
+  try {
+    const { uid, sessionId, type } = req.params
+    const admin = getAdmin()
+    const db = admin.firestore()
+    
+    const sessionRef = db.collection('users').doc(uid).collection('sessions').doc(sessionId)
+    
+    if (type === 'login') {
+      await sessionRef.update({ loginAt: admin.firestore.FieldValue.delete() })
+    } else if (type === 'logout') {
+      await sessionRef.update({ logoutAt: admin.firestore.FieldValue.delete() })
+    }
+    
+    // Clean up document if both are missing
+    const snap = await sessionRef.get()
+    if (snap.exists) {
+      const data = snap.data()
+      if (!data.loginAt && !data.logoutAt) {
+        await sessionRef.delete()
+      }
+    }
+    
+    res.json({ success: true })
+  } catch (err) {
+    console.error(`[admin/activity delete] ${req.params.sessionId}`, err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // ── GET /api/admin/stats ──────────────────────────────────────────────────────
 // Returns aggregate counts (used by Overview)
 router.get('/stats', async (_req, res) => {

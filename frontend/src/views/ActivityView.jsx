@@ -34,11 +34,16 @@ export default function ActivityView() {
     return () => { mounted = false }
   }, [API])
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (uid, eventId) => {
     if (!confirm('Delete this log?')) return
     try {
-      await deleteDoc(doc(db, 'activityLogs', id))
-      setLogs(prev => prev.filter(l => l.id !== id))
+      const type = eventId.endsWith('-login') ? 'login' : 'logout'
+      const sessionId = eventId.replace(`-${type}`, '')
+      
+      const res = await fetch(`${API}/api/admin/activity/${uid}/${sessionId}/${type}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete log from server')
+        
+      setLogs(prev => prev.filter(l => l.id !== eventId))
     } catch (err) {
       console.error('Delete failed:', err.message)
     }
@@ -97,7 +102,7 @@ export default function ActivityView() {
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     <button
-                      onClick={() => handleDelete(log.id)}
+                      onClick={() => handleDelete(log.uid, log.id)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: P.red, padding: 4 }}
                       className="atr-del"
                     >
