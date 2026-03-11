@@ -79,7 +79,7 @@ function CaptureCard({ c, i }) {
   )
 }
 
-export default function LinksView({ links }) {
+export default function LinksView({ links, onLoadMore, hasMore, loadingMore }) {
   const [q, setQ] = useState('')
   const [expanded, setExp] = useState(null)
 
@@ -146,6 +146,14 @@ export default function LinksView({ links }) {
 
       {rows.length === 0 && (
         <div className="atc" style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No tracking links yet</div>
+      )}
+      
+      {!q && hasMore && (
+        <div style={{ padding: '14px', textAlign: 'center' }}>
+          <button className="abtn abtn-g" disabled={loadingMore} onClick={onLoadMore}>
+            {loadingMore ? 'Loading...' : 'Load More Links'}
+          </button>
+        </div>
       )}
     </div>
   )

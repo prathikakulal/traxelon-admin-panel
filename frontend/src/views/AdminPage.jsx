@@ -42,8 +42,13 @@ export default function AdminPage() {
   const [adminProfile, setAdminProfile] = useState(() => { try { return JSON.parse(sessionStorage.getItem('adminProfile')) || null } catch { return null } })
   const [tab, setTab] = useState('overview')
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
+  
+  const [stats, setStats] = useState(null)
   const [officers, setOfficers] = useState([])
+  const [hasMoreOfficers, setHasMoreOfficers] = useState(true)
   const [links, setLinks] = useState([])
+  const [hasMoreLinks, setHasMoreLinks] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [toast, setToast] = useState(null)
   const [clock, setClock] = useState(new Date())
   const [fetchError, setFetchError] = useState(null)
@@ -59,15 +64,20 @@ export default function AdminPage() {
     if (!authed) return
     setLoading(true)
     try {
-      const [usersRes, linksRes] = await Promise.all([
+      const [statsRes, usersRes, linksRes] = await Promise.all([
+        fetch(`${API}/api/admin/stats`),
         fetch(`${API}/api/admin/users`),
         fetch(`${API}/api/admin/links`),
       ])
+      if (!statsRes.ok) throw new Error(`Stats fetch failed: ${statsRes.status} ${statsRes.statusText}`)
       if (!usersRes.ok) throw new Error(`Users fetch failed: ${usersRes.status} ${usersRes.statusText}`)
       if (!linksRes.ok) throw new Error(`Links fetch failed: ${linksRes.status} ${linksRes.statusText}`)
-      const [usersData, linksData] = await Promise.all([usersRes.json(), linksRes.json()])
+      const [statsData, usersData, linksData] = await Promise.all([statsRes.json(), usersRes.json(), linksRes.json()])
+      setStats(statsData)
       setOfficers(usersData)
       setLinks(linksData)
+      if (usersData.length < 50) setHasMoreOfficers(false)
+      if (linksData.length < 50) setHasMoreLinks(false)
       setFetchError(null)
     } catch (err) {
       console.error('Data fetch error:', err.message)
@@ -87,16 +97,63 @@ export default function AdminPage() {
   const handleApprove = async (uid) => {
     try {
       const o = officers.find(x => x.uid === uid)
+      if (o.status === 'approved') return // Already approved
+      
       const upd = { status: 'approved' }
-      if (!o?.creditGranted) { upd.credits = (o?.credits || 0) + 1; upd.creditGranted = true }
+      let newCredits = false
+      if (!o?.creditGranted) { upd.credits = (o?.credits || 0) + 1; upd.creditGranted = true; newCredits = true }
+      
       await updateDoc(doc(db, 'users', uid), upd)
-      showToast(o?.creditGranted ? 'Officer re-approved' : 'Approved — 1 free credit granted ✓')
+      
+      // Sync global stats
+      const statsRef = doc(db, 'metadata', 'dashboardStats')
+      const statUpdate = { approved: increment(1) }
+      if (o.status === 'pending') statUpdate.pending = increment(-1)
+      if (newCredits) statUpdate.totalCredits = increment(1)
+      try { await updateDoc(statsRef, statUpdate) } catch(err) {}
+
+      // Update local state to reflect change immediately without refresh
+      setOfficers(prev => prev.map(x => x.uid === uid ? { ...x, ...upd } : x))
+      setStats(prev => {
+        if (!prev) return prev
+        const next = { ...prev, approved: prev.approved + 1 }
+        if (o.status === 'pending') next.pending = Math.max(0, prev.pending - 1)
+        if (newCredits) next.totalCredits = prev.totalCredits + 1
+        return next
+      })
+
+      showToast(o?.creditGranted ? 'Officer re-approved ✓' : 'Approved — 1 free credit granted ✓')
     } catch (e) { showToast(e.message, false) }
   }
 
   const handleReject = async (uid) => {
-    try { await updateDoc(doc(db, 'users', uid), { status: 'rejected' }); showToast('Access revoked') }
-    catch (e) { showToast(e.message, false) }
+    try {
+      const o = officers.find(x => x.uid === uid)
+      if (o.status === 'rejected') return // Already rejected
+      
+      await updateDoc(doc(db, 'users', uid), { status: 'rejected' })
+      
+      // Sync global stats
+      const statsRef = doc(db, 'metadata', 'dashboardStats')
+      const statUpdate = {}
+      if (o.status === 'approved') statUpdate.approved = increment(-1)
+      if (o.status === 'pending') statUpdate.pending = increment(-1)
+      if (Object.keys(statUpdate).length > 0) {
+        try { await updateDoc(statsRef, statUpdate) } catch(err) {}
+      }
+
+      // Update local state to reflect change immediately without refresh
+      setOfficers(prev => prev.map(x => x.uid === uid ? { ...x, status: 'rejected' } : x))
+      setStats(prev => {
+        if (!prev) return prev
+        const next = { ...prev }
+        if (o.status === 'approved') next.approved = Math.max(0, prev.approved - 1)
+        if (o.status === 'pending') next.pending = Math.max(0, prev.pending - 1)
+        return next
+      })
+
+      showToast('Access revoked')
+    } catch (e) { showToast(e.message, false) }
   }
 
   const handleAddCredit = async (uid, amount) => {
@@ -113,8 +170,19 @@ export default function AdminPage() {
   }
 
   const handleDelete = async (uid) => {
-    if (!window.confirm('Permanently delete this officer?')) return
-    try { await deleteDoc(doc(db, 'users', uid)); showToast('Officer deleted') }
+    if (!window.confirm('Permanently delete this officer? This will also remove their login credentials and activity logs.')) return
+    try { 
+      const res = await fetch(`${API}/api/admin/users/${uid}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to delete user')
+      }
+      
+      // Update local state without refresh
+      setOfficers(prev => prev.filter(x => x.uid !== uid))
+      
+      showToast('Officer and credentials permanently deleted') 
+    }
     catch (e) { showToast(e.message, false) }
   }
 
@@ -124,11 +192,38 @@ export default function AdminPage() {
     sessionStorage.removeItem('adminProfile')
     setAdminProfile(null)
     setAuthed(false)
+    setStats(null)
     setOfficers([])
     setLinks([])
   }
 
-  const pending = officers.filter(o => o.status === 'rejected').length
+  const loadMoreOfficers = async () => {
+    if (officers.length === 0 || loadingMore || !hasMoreOfficers) return
+    setLoadingMore(true)
+    try {
+      const cursor = officers[officers.length - 1].uid
+      const res = await fetch(`${API}/api/admin/users?cursor=${cursor}`)
+      const more = await res.json()
+      if (more.length > 0) setOfficers(p => [...p, ...more])
+      if (more.length < 50) setHasMoreOfficers(false)
+    } catch (e) { showToast(e.message, false) }
+    finally { setLoadingMore(false) }
+  }
+
+  const loadMoreLinks = async () => {
+    if (links.length === 0 || loadingMore || !hasMoreLinks) return
+    setLoadingMore(true)
+    try {
+      const cursor = links[links.length - 1].id
+      const res = await fetch(`${API}/api/admin/links?cursor=${cursor}`)
+      const more = await res.json()
+      if (more.length > 0) setLinks(p => [...p, ...more])
+      if (more.length < 50) setHasMoreLinks(false)
+    } catch (e) { showToast(e.message, false) }
+    finally { setLoadingMore(false) }
+  }
+
+  const pending = stats?.pending || 0
 
   // ── Inject global styles ──
   useEffect(() => {
@@ -150,9 +245,9 @@ export default function AdminPage() {
   }
 
   const views = {
-    overview: <OverviewView officers={officers} links={links} setTab={setTab} />,
-    officers: <OfficersView officers={officers} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
-    links: <LinksView links={links} />,
+    overview: <OverviewView stats={stats} setTab={setTab} />,
+    officers: <OfficersView officers={officers} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} />,
+    links: <LinksView links={links} onLoadMore={loadMoreLinks} hasMore={hasMoreLinks} loadingMore={loadingMore} />,
     credits: <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
     coupons: <CouponsView showToast={showToast} />,
     activity: <ActivityView />,

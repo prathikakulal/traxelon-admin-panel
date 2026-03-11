@@ -4,7 +4,7 @@ import { Search, CheckCircle2, XCircle, Plus, Minus, Trash2 } from 'lucide-react
 import { SBadge } from '../components/UI.jsx'
 import { P } from '../styles/theme.js'
 
-export default function OfficersView({ officers, onApprove, onReject, onAddCredit, onDeductCredit, onDelete }) {
+export default function OfficersView({ officers, onApprove, onReject, onAddCredit, onDeductCredit, onDelete, onLoadMore, hasMore, loadingMore }) {
   const [q, setQ] = useState('')
   const [amt, setAmt] = useState({})
 
@@ -72,7 +72,7 @@ export default function OfficersView({ officers, onApprove, onReject, onAddCredi
                 </td>
                 <td style={{ padding: '12px 14px' }}>
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                    {o.status === 'pending' && <>
+                    {(!o.status || o.status === 'pending') && <>
                       <button className="abtn abtn-p" style={{ padding: '5px 10px', fontSize: 11 }} onClick={() => onApprove(o.uid)}><CheckCircle2 size={11} /> Approve</button>
                       <button className="abtn abtn-r" style={{ padding: '5px 10px', fontSize: 11 }} onClick={() => onReject(o.uid)}><XCircle size={11} /> Reject</button>
                     </>}
@@ -89,6 +89,13 @@ export default function OfficersView({ officers, onApprove, onReject, onAddCredi
           </tbody>
         </table>
       </div>
+      {!q && hasMore && (
+        <div style={{ padding: '14px', textAlign: 'center', borderTop: `1px solid ${P.border}` }}>
+          <button className="abtn abtn-g" disabled={loadingMore} onClick={onLoadMore}>
+            {loadingMore ? 'Loading...' : 'Load More Officers'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

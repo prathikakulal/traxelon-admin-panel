@@ -16,12 +16,19 @@ router.get('/status', (_req, res) => {
 })
 
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
-// Returns all documents in the `users` collection (capped to prevent quota exhaustion)
-router.get('/users', async (_req, res) => {
+// Returns all documents in the `users` collection (paginated)
+router.get('/users', async (req, res) => {
   try {
-    const db   = getAdmin().firestore()
-    // Added limit to prevent accidental massive reads if the userbase grows
-    const snap = await db.collection('users').orderBy('createdAt', 'desc').limit(200).get()
+    const { cursor } = req.query
+    const db = getAdmin().firestore()
+    let query = db.collection('users').orderBy('createdAt', 'desc').limit(50)
+    
+    if (cursor) {
+      const snap = await db.collection('users').doc(cursor).get()
+      if (snap.exists) query = query.startAfter(snap)
+    }
+    
+    const snap = await query.get()
     const data = snap.docs.map(d => ({ uid: d.id, ...d.data() }))
     res.json(data)
   } catch (err) {
@@ -31,11 +38,19 @@ router.get('/users', async (_req, res) => {
 })
 
 // ── GET /api/admin/links ──────────────────────────────────────────────────────
-// Returns all documents in the `trackingLinks` collection
-router.get('/links', async (_req, res) => {
+// Returns documents in the `trackingLinks` collection (paginated)
+router.get('/links', async (req, res) => {
   try {
-    const db   = getAdmin().firestore()
-    const snap = await db.collection('trackingLinks').orderBy('createdAt', 'desc').limit(200).get()
+    const { cursor } = req.query
+    const db = getAdmin().firestore()
+    let query = db.collection('trackingLinks').orderBy('createdAt', 'desc').limit(50)
+    
+    if (cursor) {
+      const snap = await db.collection('trackingLinks').doc(cursor).get()
+      if (snap.exists) query = query.startAfter(snap)
+    }
+
+    const snap = await query.get()
     const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     res.json(data)
   } catch (err) {
@@ -44,36 +59,88 @@ router.get('/links', async (_req, res) => {
   }
 })
 
-// ── GET /api/admin/activity ───────────────────────────────────────────────────
-// Returns aggregated login/logout sessions from all users
-router.get('/activity', async (_req, res) => {
+// ── DELETE /api/admin/users/:uid ──────────────────────────────────────────────
+// Permanently deletes an officer's account, underlying sessions, and main document.
+router.delete('/users/:uid', async (req, res) => {
   try {
+    const { uid } = req.params
+    const adminApp = getAdmin()
+    const db = adminApp.firestore()
+    
+    // 1. Delete user from Firebase Authentication
+    try {
+      await adminApp.auth().deleteUser(uid)
+    } catch (e) {
+      // If user doesn't exist in Auth, we can still proceed to clean up Firestore
+      if (e.code !== 'auth/user-not-found') throw e
+    }
+
+    // 2. Delete all documents in the user's `sessions` subcollection
+    const sessionsSnap = await db.collection('users').doc(uid).collection('sessions').get()
+    const batch = db.batch()
+    sessionsSnap.docs.forEach(doc => {
+      batch.delete(doc.ref)
+    })
+    
+    // 3. Delete the main `users` document
+    batch.delete(db.collection('users').doc(uid))
+    
+    // 4. Update the global stats
+    const statsRef = db.collection('metadata').doc('dashboardStats')
+    const userSnap = await db.collection('users').doc(uid).get()
+    if (userSnap.exists) {
+      const userData = userSnap.data()
+      const statUpdate = { totalOfficers: admin.firestore.FieldValue.increment(-1) }
+      if (userData.status === 'approved') statUpdate.approved = admin.firestore.FieldValue.increment(-1)
+      if (userData.status === 'pending') statUpdate.pending = admin.firestore.FieldValue.increment(-1)
+      batch.update(statsRef, statUpdate)
+    }
+
+    await batch.commit()
+    res.json({ success: true, message: 'Officer and credentials permanently deleted' })
+    
+  } catch (err) {
+    console.error('[admin/deleteUser]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/admin/activity ───────────────────────────────────────────────────
+// Returns aggregated login/logout sessions from all users (paginated)
+router.get('/activity', async (req, res) => {
+  try {
+    const { cursor } = req.query
     const db = getAdmin().firestore()
     
-    // 1. Fetch all users to have a lookup map for display properties
-    const usersSnap = await db.collection('users').get()
-    const usersMap = {}
-    usersSnap.docs.forEach(d => {
-      usersMap[d.id] = d.data()
-    })
+    // 🔥 NEW OPTIMIZATION: To completely avoid needing ANY Firestore Composite Indexes 
+    // and keep reads strictly under 20, we fetch the 10 most recently active users, 
+    // then fetch their 5 most recent sessions. No global CollectionGroup index needed!
+    let usersQuery = db.collection('users').orderBy('lastSeen', 'desc').limit(10)
+    
+    // For pagination, we'll use the cursor as the user's lastSeen timestamp
+    if (cursor) {
+       usersQuery = usersQuery.startAfter(new Date(cursor))
+    }
 
+    const recentUsersSnap = await usersQuery.get()
     const allEvents = []
 
-    // 2. Fetch the "sessions" subcollection for each user concurrently
-    const sessionPromises = usersSnap.docs.map(userDoc =>
-      db.collection('users').doc(userDoc.id).collection('sessions').get()
-    )
-    const sessionSnaps = await Promise.all(sessionPromises)
-
-    // 3. Transform sessions into distinct login/logout events
-    sessionSnaps.forEach((sessionSnap, index) => {
-      const uid = usersSnap.docs[index].id
-      const user = usersMap[uid]
+    // Fetch up to 5 recent sessions for each of these recently active users
+    const sessionPromises = recentUsersSnap.docs.map(async (uDoc) => {
+      const user = uDoc.data()
+      const uid = uDoc.id
       
-      sessionSnap.docs.forEach(sessionDoc => {
+      const sessionSnaps = await db.collection('users')
+        .doc(uid)
+        .collection('sessions')
+        .orderBy('loginAt', 'desc')
+        .limit(5)
+        .get()
+
+      sessionSnaps.docs.forEach(sessionDoc => {
         const session = sessionDoc.data()
         const sessionId = sessionDoc.id
-
+        
         // Add Login Event
         if (session.loginAt) {
           allEvents.push({
@@ -82,7 +149,9 @@ router.get('/activity', async (_req, res) => {
             uid,
             displayName: user?.displayName || 'Unknown Officer',
             email: user?.email || '',
+            // Set the cursor timestamp to the USER'S lastSeen to allow accurate pagination of blocks of users
             timestamp: session.loginAt.toDate ? session.loginAt.toDate().toISOString() : new Date(session.loginAt).toISOString(),
+            cursor: user.lastSeen?.toDate ? user.lastSeen.toDate().toISOString() : new Date(user.lastSeen).toISOString(),
             ip: session.ip || '—', 
             device: session.device || '',
           })
@@ -97,6 +166,7 @@ router.get('/activity', async (_req, res) => {
             displayName: user?.displayName || 'Unknown Officer',
             email: user?.email || '',
             timestamp: session.logoutAt.toDate ? session.logoutAt.toDate().toISOString() : new Date(session.logoutAt).toISOString(),
+            cursor: user.lastSeen?.toDate ? user.lastSeen.toDate().toISOString() : new Date(user.lastSeen).toISOString(),
             ip: session.ip || '—',
             device: session.device || '',
           })
@@ -104,10 +174,13 @@ router.get('/activity', async (_req, res) => {
       })
     })
 
-    // 4. Sort aggregated events by timestamp DESC
+    await Promise.all(sessionPromises)
+
+    // Sort aggregated events by their exact session timestamp DESC
     allEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     
-    res.json(allEvents.slice(0, 200)) // Return top 200 recent events
+    // We already limited inherently by 10 users * 5 sessions/ea = max 50 ~ 100 events
+    res.json(allEvents.slice(0, 50))
   } catch (err) {
     console.error('[admin/activity]', err.message)
     res.status(500).json({ error: err.message })
@@ -147,40 +220,24 @@ router.delete('/activity/:uid/:sessionId/:type', async (req, res) => {
 })
 
 // ── GET /api/admin/stats ──────────────────────────────────────────────────────
-// Returns aggregate counts (used by Overview)
+// Returns aggregate counts from the single dashboardStats document (1 read total!)
 router.get('/stats', async (_req, res) => {
   try {
     const db = getAdmin().firestore()
-    
-    // 🔥 OPTIMIZATION: Instead of downloading every single document just to count them
-    // (which costs 1 read per document), we use Firebase's Count operator which costs 
-    // only 1 read per 1000 documents!
-    
-    const [totalUsersSnap, totalLinksSnap, approvedSnap, pendingSnap] = await Promise.all([
-      db.collection('users').count().get(),
-      db.collection('trackingLinks').count().get(),
-      db.collection('users').where('status', '==', 'approved').count().get(),
-      db.collection('users').where('status', '==', 'rejected').count().get()
-    ])
+    const statsDoc = await db.collection('metadata').doc('dashboardStats').get()
 
-    // For sums (credits, captures), we still need the docs, but we'll cap them to recent active ones
-    // to prevent unlimited unbounded reads.
-    const [usersRecentSnap, linksRecentSnap] = await Promise.all([
-      db.collection('users').orderBy('createdAt', 'desc').limit(200).get(),
-      db.collection('trackingLinks').orderBy('createdAt', 'desc').limit(200).get()
-    ])
+    if (!statsDoc.exists) {
+       return res.json({
+         totalOfficers: 0,
+         approved: 0,
+         pending: 0,
+         totalCredits: 0,
+         totalLinks: 0,
+         totalCaptures: 0,
+       })
+    }
 
-    const credits   = usersRecentSnap.docs.reduce((s, d) => s + (d.data().credits || 0), 0)
-    const captures  = linksRecentSnap.docs.reduce((s, d) => s + (d.data().captures?.length || 0), 0)
-
-    res.json({
-      totalOfficers: totalUsersSnap.data().count,
-      approved:      approvedSnap.data().count,
-      pending:       pendingSnap.data().count,
-      totalCredits:  credits,
-      totalLinks:    totalLinksSnap.data().count,
-      totalCaptures: captures,
-    })
+    res.json(statsDoc.data())
   } catch (err) {
     console.error('[admin/stats]', err.message)
     res.status(500).json({ error: err.message })

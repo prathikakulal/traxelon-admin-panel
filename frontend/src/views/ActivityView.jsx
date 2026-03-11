@@ -12,6 +12,8 @@ export default function ActivityView() {
   const [q, setQ] = useState('')
 
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
 
   const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'
 
@@ -23,7 +25,10 @@ export default function ActivityView() {
         const res = await fetch(`${API}/api/admin/activity`)
         if (!res.ok) throw new Error('Failed to fetch activity logs')
         const data = await res.json()
-        if (mounted) setLogs(data)
+        if (mounted) {
+          setLogs(data)
+          if (data.length < 50) setHasMore(false)
+        }
       } catch (err) {
         console.error('activityLogs error:', err.message)
       } finally {
@@ -33,6 +38,25 @@ export default function ActivityView() {
     fetchActivity()
     return () => { mounted = false }
   }, [API])
+
+  const loadMore = async () => {
+    if (logs.length === 0 || loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const cursor = logs[logs.length - 1].cursor || logs[logs.length - 1].timestamp
+      const res = await fetch(`${API}/api/admin/activity?cursor=${cursor}`)
+      if (!res.ok) throw new Error('Failed to fetch more logs')
+      const more = await res.json()
+      if (more.length > 0) {
+        setLogs(prev => [...prev, ...more])
+      }
+      if (more.length < 50) setHasMore(false)
+    } catch (err) {
+      console.error('loadMore error:', err.message)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const handleDelete = async (uid, eventId) => {
     if (!confirm('Delete this log?')) return
@@ -115,11 +139,19 @@ export default function ActivityView() {
                 <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.cyan, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>Loading sessions...</td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No activity logs yet</td></tr>
+                <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No activity logs found</td></tr>
               )}
             </tbody>
           </table>
         </div>
+        
+        {!loading && hasMore && (
+          <div style={{ padding: '14px', textAlign: 'center', borderTop: `1px solid ${P.border}` }}>
+            <button className="abtn abtn-g" disabled={loadingMore} onClick={loadMore}>
+              {loadingMore ? 'Loading...' : 'Load More Options'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
