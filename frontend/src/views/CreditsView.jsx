@@ -9,7 +9,7 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit, onD
   const [amt, setAmt]   = useState({})
   const [ded, setDed]   = useState({})
 
-  const approved = officers.filter(o => o.status === 'approved' && !o.isAdmin).filter(o =>
+  const approved = officers.filter(o => o.status !== 'rejected' && !o.isAdmin).filter(o =>
     (o.displayName || '').toLowerCase().includes(q.toLowerCase()) ||
     (o.email || '').toLowerCase().includes(q.toLowerCase())
   )
@@ -107,8 +107,7 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit, onD
                         className="abtn abtn-r"
                         style={{ padding: '5px 12px', fontSize: 12 }}
                         onClick={() => {
-                          const n = parseInt(ded[o.uid] || 1)
-                          for (let i = 0; i < n; i++) onDeductCredit(o.uid)
+                          onDeductCredit(o.uid, parseInt(ded[o.uid] || 1))
                           setDed(p => ({ ...p, [o.uid]: '' }))
                         }}
                       >

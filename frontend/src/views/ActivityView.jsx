@@ -121,9 +121,7 @@ export default function ActivityView() {
                       <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: P.txt2 }}>{fmt(log.timestamp)}</span>
                     </div>
                   </td>
-                  <td style={{ padding: '12px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: P.muted }}>
-                    {log.ip || '—'}{log.device ? ` · ${log.device}` : ''}
-                  </td>
+
                   <td style={{ padding: '12px 14px' }}>
                     <button
                       onClick={() => handleDelete(log.uid, log.id)}
@@ -136,10 +134,10 @@ export default function ActivityView() {
                 </tr>
               ))}
               {loading && (
-                <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.cyan, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>Loading sessions...</td></tr>
+                <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: P.cyan, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>Loading sessions...</td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No activity logs found</td></tr>
+                <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No activity logs found</td></tr>
               )}
             </tbody>
           </table>

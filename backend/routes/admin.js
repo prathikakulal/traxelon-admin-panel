@@ -221,24 +221,53 @@ router.delete('/activity/:uid/:sessionId/:type', async (req, res) => {
 })
 
 // ── GET /api/admin/stats ──────────────────────────────────────────────────────
-// Returns aggregate counts from the single dashboardStats document (1 read total!)
+// Dynamically fetches all stats live from the DB to guarantee 100% accuracy, per user request.
 router.get('/stats', async (_req, res) => {
   try {
     const db = getAdmin().firestore()
-    const statsDoc = await db.collection('metadata').doc('dashboardStats').get()
+    
+    // Fetch users and links simultaneously
+    const [usersSnap, linksSnap] = await Promise.all([
+      db.collection('users').get(),
+      db.collection('trackingLinks').get()
+    ])
 
-    if (!statsDoc.exists) {
-       return res.json({
-         totalOfficers: 0,
-         approved: 0,
-         pending: 0,
-         totalCredits: 0,
-         totalLinks: 0,
-         totalCaptures: 0,
-       })
+    let totalOfficers = usersSnap.docs.length;
+    let approved = 0;
+    let pending = 0;
+    let totalCredits = 0;
+
+    usersSnap.docs.forEach(d => {
+      const u = d.data();
+      if (u.status === 'approved' || !u.status) approved++;
+      if (u.status === 'pending') pending++;
+      if (u.status === 'rejected') pending++; 
+      totalCredits += (u.credits || 0);
+    });
+
+    let totalLinks = linksSnap.docs.length;
+    let totalCaptures = 0;
+
+    linksSnap.docs.forEach(d => {
+      const link = d.data();
+      if (Array.isArray(link.captures)) {
+        totalCaptures += link.captures.length;
+      }
+    });
+
+    const liveStats = {
+      totalOfficers,
+      approved,
+      pending,
+      totalCredits,
+      totalLinks,
+      totalCaptures
     }
 
-    res.json(statsDoc.data())
+    // Fire-and-forget background update to the cache map just in case
+    db.collection('metadata').doc('dashboardStats').set(liveStats, { merge: true }).catch(() => {})
+
+    res.json(liveStats)
   } catch (err) {
     console.error('[admin/stats]', err.message)
     res.status(500).json({ error: err.message })
