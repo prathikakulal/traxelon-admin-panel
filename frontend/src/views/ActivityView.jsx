@@ -27,7 +27,7 @@ export default function ActivityView() {
         const data = await res.json()
         if (mounted) {
           setLogs(data)
-          if (data.length < 50) setHasMore(false)
+          if (data.length < 20) setHasMore(false)
         }
       } catch (err) {
         console.error('activityLogs error:', err.message)
@@ -50,7 +50,7 @@ export default function ActivityView() {
       if (more.length > 0) {
         setLogs(prev => [...prev, ...more])
       }
-      if (more.length < 50) setHasMore(false)
+      if (more.length < 20) setHasMore(false)
     } catch (err) {
       console.error('loadMore error:', err.message)
     } finally {

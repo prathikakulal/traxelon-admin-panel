@@ -21,7 +21,7 @@ router.get('/users', async (req, res) => {
   try {
     const { cursor } = req.query
     const db = getAdmin().firestore()
-    let query = db.collection('users').orderBy('createdAt', 'desc').limit(50)
+    let query = db.collection('users').orderBy('createdAt', 'desc').limit(20)
     
     if (cursor) {
       const snap = await db.collection('users').doc(cursor).get()
@@ -43,7 +43,7 @@ router.get('/links', async (req, res) => {
   try {
     const { cursor } = req.query
     const db = getAdmin().firestore()
-    let query = db.collection('trackingLinks').orderBy('createdAt', 'desc').limit(50)
+    let query = db.collection('trackingLinks').orderBy('createdAt', 'desc').limit(20)
     
     if (cursor) {
       const snap = await db.collection('trackingLinks').doc(cursor).get()
@@ -181,7 +181,7 @@ router.get('/activity', async (req, res) => {
     allEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     
     // We already limited inherently by 10 users * 5 sessions/ea = max 50 ~ 100 events
-    res.json(allEvents.slice(0, 50))
+    res.json(allEvents.slice(0, 20))
   } catch (err) {
     console.error('[admin/activity]', err.message)
     res.status(500).json({ error: err.message })

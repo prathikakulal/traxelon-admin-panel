@@ -76,8 +76,8 @@ export default function AdminPage() {
       setStats(statsData)
       setOfficers(usersData)
       setLinks(linksData)
-      if (usersData.length < 50) setHasMoreOfficers(false)
-      if (linksData.length < 50) setHasMoreLinks(false)
+      if (usersData.length < 20) setHasMoreOfficers(false)
+      if (linksData.length < 20) setHasMoreLinks(false)
       setFetchError(null)
     } catch (err) {
       console.error('Data fetch error:', err.message)
@@ -210,7 +210,7 @@ export default function AdminPage() {
       const res = await fetch(`${API}/api/admin/users?cursor=${cursor}`)
       const more = await res.json()
       if (more.length > 0) setOfficers(p => [...p, ...more])
-      if (more.length < 50) setHasMoreOfficers(false)
+      if (more.length < 20) setHasMoreOfficers(false)
     } catch (e) { showToast(e.message, false) }
     finally { setLoadingMore(false) }
   }
@@ -223,7 +223,7 @@ export default function AdminPage() {
       const res = await fetch(`${API}/api/admin/links?cursor=${cursor}`)
       const more = await res.json()
       if (more.length > 0) setLinks(p => [...p, ...more])
-      if (more.length < 50) setHasMoreLinks(false)
+      if (more.length < 20) setHasMoreLinks(false)
     } catch (e) { showToast(e.message, false) }
     finally { setLoadingMore(false) }
   }
