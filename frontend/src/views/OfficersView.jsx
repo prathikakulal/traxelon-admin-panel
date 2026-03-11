@@ -53,7 +53,7 @@ export default function OfficersView({ officers, onApprove, onReject, onAddCredi
                   </div>
                 </td>
                 <td style={{ padding: '12px 14px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: P.txt2 }}>{o.badgeId || '—'}</td>
-                <td style={{ padding: '12px 14px' }}><SBadge status={o.status || 'pending'} /></td>
+                <td style={{ padding: '12px 14px' }}><SBadge status={o.status === 'pending' || !o.status ? 'approved' : o.status} /></td>
                 <td style={{ padding: '12px 14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 18, color: P.cyan, fontWeight: 700, minWidth: 24 }}>{o.credits ?? 0}</span>
@@ -72,11 +72,7 @@ export default function OfficersView({ officers, onApprove, onReject, onAddCredi
                 </td>
                 <td style={{ padding: '12px 14px' }}>
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                    {(!o.status || o.status === 'pending') && <>
-                      <button className="abtn abtn-p" style={{ padding: '5px 10px', fontSize: 11 }} onClick={() => onApprove(o.uid)}><CheckCircle2 size={11} /> Approve</button>
-                      <button className="abtn abtn-r" style={{ padding: '5px 10px', fontSize: 11 }} onClick={() => onReject(o.uid)}><XCircle size={11} /> Reject</button>
-                    </>}
-                    {o.status === 'approved' && <button className="abtn abtn-y" style={{ padding: '5px 10px', fontSize: 11 }} onClick={() => onReject(o.uid)}><XCircle size={11} /> Revoke</button>}
+                    {(!o.status || o.status === 'pending' || o.status === 'approved') && <button className="abtn abtn-y" style={{ padding: '5px 10px', fontSize: 11 }} onClick={() => onReject(o.uid)}><XCircle size={11} /> Revoke</button>}
                     {o.status === 'rejected' && <button className="abtn abtn-p" style={{ padding: '5px 10px', fontSize: 11 }} onClick={() => onApprove(o.uid)}><CheckCircle2 size={11} /> Re-approve</button>}
                     <button className="aib" style={{ color: P.red }} onClick={() => onDelete(o.uid)}><Trash2 size={12} /></button>
                   </div>

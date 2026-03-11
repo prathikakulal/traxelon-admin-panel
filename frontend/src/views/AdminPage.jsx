@@ -129,26 +129,30 @@ export default function AdminPage() {
   const handleReject = async (uid) => {
     try {
       const o = officers.find(x => x.uid === uid)
-      if (o.status === 'rejected') return // Already rejected
       
-      await updateDoc(doc(db, 'users', uid), { status: 'rejected' })
+      // Revoking means moving them back to 'pending' as requested by the user
+      await updateDoc(doc(db, 'users', uid), { status: 'pending' })
       
       // Sync global stats
       const statsRef = doc(db, 'metadata', 'dashboardStats')
       const statUpdate = {}
-      if (o.status === 'approved') statUpdate.approved = increment(-1)
-      if (o.status === 'pending') statUpdate.pending = increment(-1)
+      if (!o.status || o.status === 'approved') {
+        statUpdate.approved = increment(-1)
+        statUpdate.pending = increment(1)
+      }
       if (Object.keys(statUpdate).length > 0) {
         try { await updateDoc(statsRef, statUpdate) } catch(err) {}
       }
 
       // Update local state to reflect change immediately without refresh
-      setOfficers(prev => prev.map(x => x.uid === uid ? { ...x, status: 'rejected' } : x))
+      setOfficers(prev => prev.map(x => x.uid === uid ? { ...x, status: 'pending' } : x))
       setStats(prev => {
         if (!prev) return prev
         const next = { ...prev }
-        if (o.status === 'approved') next.approved = Math.max(0, prev.approved - 1)
-        if (o.status === 'pending') next.pending = Math.max(0, prev.pending - 1)
+        if (!o.status || o.status === 'approved') {
+          next.approved = Math.max(0, prev.approved - 1)
+          next.pending = prev.pending + 1
+        }
         return next
       })
 
