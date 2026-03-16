@@ -91,6 +91,9 @@ export const STYLES = `
     .mobile-overlay.open { display: block; }
   }
 
+  /* ── Header mobile-only datetime (hidden on desktop) ── */
+  .header-mobile-dt { display: none; }
+
   /* ── Header mobile tweaks ── */
   @media (max-width: 600px) {
     .header-clock { display: none; }
@@ -111,6 +114,27 @@ export const STYLES = `
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    /* Show date+time block in header centre */
+    .header-mobile-dt {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1px;
+    }
+    .header-mobile-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #F0F4FF;
+      line-height: 1.1;
+    }
+    .header-mobile-date {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: #4A5A80;
+      line-height: 1.1;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
   }
 `

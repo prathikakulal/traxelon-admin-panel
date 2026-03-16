@@ -325,7 +325,13 @@ export default function AdminPage() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <header className="admin-header" style={{ height: 58, borderBottom: `1px solid ${P.border}`, background: P.surf, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 10, flexShrink: 0 }}>
             <button className="aib" onClick={() => setSideOpen(v => !v)}>{sideOpen ? <X size={13} /> : <Menu size={13} />}</button>
-            <div style={{ flex: 1 }} />
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+              {/* Mobile-only: date + time in header centre */}
+              <div className="header-mobile-dt">
+                <span className="header-mobile-time">{clock.toLocaleTimeString('en-IN', { hour12: true })}</span>
+                <span className="header-mobile-date">{new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+              </div>
+            </div>
             <span className="header-clock" style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: P.muted }}>{clock.toLocaleTimeString('en-IN', { hour12: true })}</span>
             <div className="header-divider" style={{ width: 1, height: 22, background: P.border }} />
             {pending > 0 && (
