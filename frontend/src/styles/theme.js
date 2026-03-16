@@ -90,4 +90,27 @@ export const STYLES = `
     .sidebar.closed { transform: translateX(-100%); }
     .mobile-overlay.open { display: block; }
   }
+
+  /* ── Header mobile tweaks ── */
+  @media (max-width: 600px) {
+    .header-clock { display: none; }
+    .header-divider { display: none; }
+    .admin-header { padding: 0 12px !important; gap: 8px !important; }
+    .header-pending {
+      padding: 4px 8px !important;
+      gap: 4px !important;
+    }
+    .header-pending span {
+      font-size: 10px !important;
+    }
+    /* Hide email under admin name — too long on mobile */
+    .header-email { display: none; }
+    /* Keep profile text block but prevent overflow */
+    .header-profile-text { max-width: 70px; overflow: hidden; }
+    .header-profile-text > div:first-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
 `

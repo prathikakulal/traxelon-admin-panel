@@ -323,24 +323,24 @@ export default function AdminPage() {
 
         {/* MAIN */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <header style={{ height: 58, borderBottom: `1px solid ${P.border}`, background: P.surf, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 14, flexShrink: 0 }}>
+          <header className="admin-header" style={{ height: 58, borderBottom: `1px solid ${P.border}`, background: P.surf, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 10, flexShrink: 0 }}>
             <button className="aib" onClick={() => setSideOpen(v => !v)}>{sideOpen ? <X size={13} /> : <Menu size={13} />}</button>
             <div style={{ flex: 1 }} />
-            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: P.muted }}>{clock.toLocaleTimeString('en-IN', { hour12: true })}</span>
-            <div style={{ width: 1, height: 22, background: P.border }} />
+            <span className="header-clock" style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: P.muted }}>{clock.toLocaleTimeString('en-IN', { hour12: true })}</span>
+            <div className="header-divider" style={{ width: 1, height: 22, background: P.border }} />
             {pending > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 20, padding: '4px 11px' }}>
+              <div className="header-pending" style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 20, padding: '5px 10px', flexShrink: 0 }}>
                 <Bell size={12} color={P.yellow} />
-                <span style={{ fontSize: 11, color: P.yellow, fontFamily: "'JetBrains Mono',monospace" }}>{pending} pending</span>
+                <span style={{ fontSize: 11, color: P.yellow, fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap' }}>{pending} pending</span>
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(0,212,255,.1)', border: '1px solid rgba(0,212,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Bebas Neue',cursive", fontSize: 13, color: P.cyan }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(0,212,255,.1)', border: '1px solid rgba(0,212,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Bebas Neue',cursive", fontSize: 13, color: P.cyan, flexShrink: 0 }}>
                 {(adminProfile?.displayName || 'A')[0].toUpperCase()}
               </div>
-              <div>
+              <div className="header-profile-text">
                 <div style={{ fontSize: 12, color: P.txt, lineHeight: 1.2 }}>{adminProfile?.displayName || 'Admin'}</div>
-                <div style={{ fontSize: 10, color: P.muted, fontFamily: "'JetBrains Mono',monospace" }}>{adminProfile?.email || ''}</div>
+                <div className="header-email" style={{ fontSize: 10, color: P.muted, fontFamily: "'JetBrains Mono',monospace" }}>{adminProfile?.email || ''}</div>
               </div>
             </div>
           </header>
