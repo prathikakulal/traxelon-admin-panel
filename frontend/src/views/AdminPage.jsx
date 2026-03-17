@@ -41,6 +41,7 @@ export default function AdminPage() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem('adminAuthed') === 'true')
   const [adminProfile, setAdminProfile] = useState(() => { try { return JSON.parse(sessionStorage.getItem('adminProfile')) || null } catch { return null } })
   const [tab, setTab] = useState('overview')
+  const handleSetTab = (id) => { setTab(id); if (id !== 'officers') setHighlightUid(null) }
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
   
   const [stats, setStats] = useState(null)
@@ -49,6 +50,7 @@ export default function AdminPage() {
   const [links, setLinks] = useState([])
   const [hasMoreLinks, setHasMoreLinks] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [highlightUid, setHighlightUid] = useState(null)
   const [toast, setToast] = useState(null)
   const [clock, setClock] = useState(new Date())
   const [fetchError, setFetchError] = useState(null)
@@ -250,9 +252,9 @@ export default function AdminPage() {
   }
 
   const views = {
-    overview: <OverviewView stats={stats} setTab={setTab} />,
-    officers: <OfficersView officers={officers} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} />,
-    links: <LinksView links={links} onLoadMore={loadMoreLinks} hasMore={hasMoreLinks} loadingMore={loadingMore} />,
+    overview: <OverviewView stats={stats} setTab={handleSetTab} />,
+    officers: <OfficersView officers={officers} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
+    links: <LinksView links={links} onLoadMore={loadMoreLinks} hasMore={hasMoreLinks} loadingMore={loadingMore} onOfficerClick={(uid) => { setHighlightUid(uid); setTab('officers') }} />,
     credits: <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
     coupons: <CouponsView showToast={showToast} />,
     activity: <ActivityView />,
@@ -303,7 +305,7 @@ export default function AdminPage() {
                 <button
                   key={item.id}
                   className={`anav${tab === item.id ? ' aon' : ''}`}
-                  onClick={() => setTab(item.id)}
+                  onClick={() => handleSetTab(item.id)}
                   title={!sideOpen ? item.label : undefined}
                   style={{ justifyContent: sideOpen ? 'flex-start' : 'center' }}
                 >

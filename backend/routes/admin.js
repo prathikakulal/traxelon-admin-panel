@@ -53,7 +53,29 @@ router.get('/links', async (req, res) => {
 
     const snap = await query.get()
     const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    res.json(data)
+
+    // Enrich with creator info: collect unique UIDs, batch-fetch users
+    const uids = [...new Set(data.map(l => l.uid).filter(Boolean))]
+    const userMap = {}
+    if (uids.length > 0) {
+      await Promise.all(
+        uids.map(async uid => {
+          try {
+            const uSnap = await db.collection('users').doc(uid).get()
+            if (uSnap.exists) {
+              const u = uSnap.data()
+              userMap[uid] = { creatorName: u.displayName || u.email || uid, creatorEmail: u.email || '' }
+            }
+          } catch (_) {}
+        })
+      )
+    }
+    const enriched = data.map(l => ({
+      ...l,
+      ...(l.uid && userMap[l.uid] ? userMap[l.uid] : {}),
+    }))
+
+    res.json(enriched)
   } catch (err) {
     console.error('[admin/links]', err.message)
     res.status(500).json({ error: err.message })

@@ -1,12 +1,20 @@
 // src/views/OfficersView.jsx
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Search, CheckCircle2, XCircle, Plus, Minus, Trash2 } from 'lucide-react'
 import { SBadge } from '../components/UI.jsx'
 import { P } from '../styles/theme.js'
 
-export default function OfficersView({ officers, onApprove, onReject, onAddCredit, onDeductCredit, onDelete, onLoadMore, hasMore, loadingMore }) {
+export default function OfficersView({ officers, onApprove, onReject, onAddCredit, onDeductCredit, onDelete, onLoadMore, hasMore, loadingMore, highlightUid }) {
   const [q, setQ] = useState('')
   const [amt, setAmt] = useState({})
+  const highlightRef = useRef(null)
+
+  // Scroll highlighted officer into view
+  useEffect(() => {
+    if (highlightUid && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlightUid])
 
   const rows = officers.filter(o =>
     (o.displayName || '').toLowerCase().includes(q.toLowerCase()) ||
@@ -34,8 +42,23 @@ export default function OfficersView({ officers, onApprove, onReject, onAddCredi
             </tr>
           </thead>
           <tbody>
-            {rows.map(o => (
-              <tr key={o.uid} className="atr" style={{ borderBottom: `1px solid ${P.border}18` }}>
+            {rows.map(o => {
+              const isHighlighted = highlightUid && o.uid === highlightUid
+              return (
+              <tr
+                key={o.uid}
+                ref={isHighlighted ? highlightRef : null}
+                className="atr"
+                style={{
+                  borderBottom: `1px solid ${P.border}18`,
+                  ...(isHighlighted ? {
+                    background: 'rgba(0,212,255,.07)',
+                    outline: `1.5px solid rgba(0,212,255,.45)`,
+                    outlineOffset: '-1px',
+                    borderRadius: 6,
+                  } : {}),
+                }}
+              >
                 <td style={{ padding: '12px 14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{
@@ -76,7 +99,8 @@ export default function OfficersView({ officers, onApprove, onReject, onAddCredi
                   </div>
                 </td>
               </tr>
-            ))}
+              )
+            })}
             {rows.length === 0 && (
               <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: P.muted, fontFamily: "'DM Sans',sans-serif", fontSize: 13 }}>No officers found</td></tr>
             )}
