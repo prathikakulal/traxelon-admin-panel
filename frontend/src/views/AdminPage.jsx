@@ -165,15 +165,21 @@ export default function AdminPage() {
 
   const handleAddCredit = async (uid, amount) => {
     if (!amount || amount < 1) return
-    try { await updateDoc(doc(db, 'users', uid), { credits: increment(amount) }); showToast(`+${amount} credit${amount > 1 ? 's' : ''} added`) }
-    catch (e) { showToast(e.message, false) }
+    try {
+      await updateDoc(doc(db, 'users', uid), { credits: increment(amount) })
+      setOfficers(prev => prev.map(x => x.uid === uid ? { ...x, credits: (x.credits || 0) + amount } : x))
+      showToast(`+${amount} credit${amount > 1 ? 's' : ''} added`)
+    } catch (e) { showToast(e.message, false) }
   }
 
   const handleDeductCredit = async (uid, amount = 1) => {
     const o = officers.find(x => x.uid === uid)
     if ((o?.credits || 0) < amount) { showToast('Not enough credits to deduct', false); return }
-    try { await updateDoc(doc(db, 'users', uid), { credits: increment(-amount) }); showToast(`−${amount} credit${amount > 1 ? 's' : ''} deducted`) }
-    catch (e) { showToast(e.message, false) }
+    try {
+      await updateDoc(doc(db, 'users', uid), { credits: increment(-amount) })
+      setOfficers(prev => prev.map(x => x.uid === uid ? { ...x, credits: Math.max(0, (x.credits || 0) - amount) } : x))
+      showToast(`−${amount} credit${amount > 1 ? 's' : ''} deducted`)
+    } catch (e) { showToast(e.message, false) }
   }
 
   const handleDelete = async (uid) => {
