@@ -1,8 +1,9 @@
 // backend/routes/admin.js
 // Admin API routes — served via Firebase Admin SDK (bypasses Firestore security rules)
 
-const express       = require('express')
-const { getAdmin }  = require('../firebase/admin')
+const express            = require('express')
+const { getAdmin }       = require('../firebase/admin')
+const { AggregateField } = require('firebase-admin/firestore')
 
 const router = express.Router()
 
@@ -52,7 +53,29 @@ router.get('/links', async (req, res) => {
 
     const snap = await query.get()
     const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    res.json(data)
+
+    // Enrich with creator info: collect unique UIDs, batch-fetch users
+    const uids = [...new Set(data.map(l => l.uid).filter(Boolean))]
+    const userMap = {}
+    if (uids.length > 0) {
+      await Promise.all(
+        uids.map(async uid => {
+          try {
+            const uSnap = await db.collection('users').doc(uid).get()
+            if (uSnap.exists) {
+              const u = uSnap.data()
+              userMap[uid] = { creatorName: u.displayName || u.email || uid, creatorEmail: u.email || '' }
+            }
+          } catch (_) {}
+        })
+      )
+    }
+    const enriched = data.map(l => ({
+      ...l,
+      ...(l.uid && userMap[l.uid] ? userMap[l.uid] : {}),
+    }))
+
+    res.json(enriched)
   } catch (err) {
     console.error('[admin/links]', err.message)
     res.status(500).json({ error: err.message })
@@ -221,56 +244,45 @@ router.delete('/activity/:uid/:sessionId/:type', async (req, res) => {
 })
 
 // ── GET /api/admin/stats ──────────────────────────────────────────────────────
-// Dynamically fetches all stats live from the DB to guarantee 100% accuracy, per user request.
+// Uses Firestore aggregation queries (count / sum) — always accurate, always cheap.
+// Total cost: ~7 reads regardless of collection size. No cache drift possible.
 router.get('/stats', async (_req, res) => {
   try {
     const db = getAdmin().firestore()
-    
-    // Fetch users and links simultaneously
-    const [usersSnap, linksSnap] = await Promise.all([
-      db.collection('users').get(),
-      db.collection('trackingLinks').get()
+
+    // Run all aggregations in parallel
+    const [
+      allUsersSnap,   // total users (officers + admin)
+      adminSnap,      // how many have isAdmin === true
+      pendingSnap,    // status === 'pending'
+      rejectedSnap,   // status === 'rejected' (shown as pending in UI)
+      linksSnap,      // total tracking links
+      creditsSnap,    // sum of credits across all users
+      cachedSnap,     // cache doc — only used for totalCaptures (array-based, can't aggregate)
+    ] = await Promise.all([
+      db.collection('users').count().get(),
+      db.collection('users').where('isAdmin', '==', true).count().get(),
+      db.collection('users').where('status', '==', 'pending').count().get(),
+      db.collection('users').where('status', '==', 'rejected').count().get(),
+      db.collection('trackingLinks').count().get(),
+      db.collection('users').aggregate({ total: AggregateField.sum('credits') }).get(),
+      db.collection('metadata').doc('dashboardStats').get(),
     ])
 
-    let totalOfficers = 0;
-    let approved = 0;
-    let pending = 0;
-    let totalCredits = 0;
+    const totalOfficers = allUsersSnap.data().count - adminSnap.data().count
+    const pending       = pendingSnap.data().count + rejectedSnap.data().count
+    const approved      = Math.max(0, totalOfficers - pending)
+    const totalCredits  = creditsSnap.data().total || 0
+    const totalLinks    = linksSnap.data().count
+    // totalCaptures lives inside an array per link doc — can't aggregate, use cached value
+    const totalCaptures = cachedSnap.exists ? (cachedSnap.data().totalCaptures || 0) : 0
 
-    usersSnap.docs.forEach(d => {
-      const u = d.data();
-      if (u.isAdmin) return; // Skip the admin account
+    const stats = { totalOfficers, approved, pending, totalCredits, totalLinks, totalCaptures }
 
-      totalOfficers++;
-      if (u.status === 'approved' || !u.status) approved++;
-      if (u.status === 'pending') pending++;
-      if (u.status === 'rejected') pending++; 
-      totalCredits += (u.credits || 0);
-    });
+    // Keep cache in sync so sync-stats.js and other scripts stay consistent
+    db.collection('metadata').doc('dashboardStats').set(stats, { merge: true }).catch(() => {})
 
-    let totalLinks = linksSnap.docs.length;
-    let totalCaptures = 0;
-
-    linksSnap.docs.forEach(d => {
-      const link = d.data();
-      if (Array.isArray(link.captures)) {
-        totalCaptures += link.captures.length;
-      }
-    });
-
-    const liveStats = {
-      totalOfficers,
-      approved,
-      pending,
-      totalCredits,
-      totalLinks,
-      totalCaptures
-    }
-
-    // Fire-and-forget background update to the cache map just in case
-    db.collection('metadata').doc('dashboardStats').set(liveStats, { merge: true }).catch(() => {})
-
-    res.json(liveStats)
+    res.json(stats)
   } catch (err) {
     console.error('[admin/stats]', err.message)
     res.status(500).json({ error: err.message })

@@ -1,6 +1,6 @@
 // src/views/LinksView.jsx
 import { useState } from 'react'
-import { Search, ChevronDown, ChevronUp, MapPin, Clock } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, MapPin, Clock, User } from 'lucide-react'
 import { SBadge } from '../components/UI.jsx'
 import { P } from '../styles/theme.js'
 
@@ -91,7 +91,7 @@ function CaptureCard({ c, i }) {
   )
 }
 
-export default function LinksView({ links, onLoadMore, hasMore, loadingMore }) {
+export default function LinksView({ links, onLoadMore, hasMore, loadingMore, onOfficerClick }) {
   const [q, setQ] = useState('')
   const [expanded, setExp] = useState(null)
 
@@ -121,6 +121,23 @@ export default function LinksView({ links, onLoadMore, hasMore, loadingMore }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                   <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: P.cyan }}>/t/{l.token?.slice(0, 10)}…</span>
                   <SBadge status={l.active ? 'active' : 'inactive'} />
+                  {l.creatorName && (
+                    <button
+                      onClick={e => { e.stopPropagation(); onOfficerClick && onOfficerClick(l.uid) }}
+                      title={`Go to officer: ${l.creatorName}`}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: 'rgba(0,212,255,.08)', border: '1px solid rgba(0,212,255,.2)',
+                        borderRadius: 20, padding: '2px 8px', cursor: 'pointer',
+                        fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: P.cyan,
+                        transition: 'background .15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,255,.18)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,212,255,.08)'}
+                    >
+                      <User size={9} /> {l.creatorName}
+                    </button>
+                  )}
                 </div>
                 <div style={{ fontSize: 13, color: P.txt2 }}>{l.label || 'Tracking Link'}</div>
               </div>
@@ -159,7 +176,7 @@ export default function LinksView({ links, onLoadMore, hasMore, loadingMore }) {
       {rows.length === 0 && (
         <div className="atc" style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No tracking links yet</div>
       )}
-      
+
       {!q && hasMore && (
         <div style={{ padding: '14px', textAlign: 'center' }}>
           <button className="abtn abtn-g" disabled={loadingMore} onClick={onLoadMore}>
@@ -172,4 +189,4 @@ export default function LinksView({ links, onLoadMore, hasMore, loadingMore }) {
 }
 
 
-//hello world 
+//hello world
