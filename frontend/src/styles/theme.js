@@ -90,4 +90,51 @@ export const STYLES = `
     .sidebar.closed { transform: translateX(-100%); }
     .mobile-overlay.open { display: block; }
   }
+
+  /* ── Header mobile-only datetime (hidden on desktop) ── */
+  .header-mobile-dt { display: none; }
+
+  /* ── Header mobile tweaks ── */
+  @media (max-width: 600px) {
+    .header-clock { display: none; }
+    .header-divider { display: none; }
+    .admin-header { padding: 0 12px !important; gap: 8px !important; }
+    .header-pending {
+      padding: 4px 8px !important;
+      gap: 4px !important;
+    }
+    .header-pending span {
+      font-size: 10px !important;
+    }
+    /* Hide email under admin name — too long on mobile */
+    .header-email { display: none; }
+    /* Keep profile text block but prevent overflow */
+    .header-profile-text { max-width: 70px; overflow: hidden; }
+    .header-profile-text > div:first-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* Show date+time block in header centre */
+    .header-mobile-dt {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1px;
+    }
+    .header-mobile-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #F0F4FF;
+      line-height: 1.1;
+    }
+    .header-mobile-date {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: #4A5A80;
+      line-height: 1.1;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  }
 `
