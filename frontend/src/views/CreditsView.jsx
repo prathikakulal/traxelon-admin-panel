@@ -116,18 +116,17 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit, onD
                     </div>
                   </td>
 
-                  {/* Delete officer */}
+                  {/* Clear credits button */}
                   <td style={{ padding: '12px 14px' }}>
                     <button
-                      className="aib"
-                      style={{ color: P.red }}
-                      title="Delete officer"
-                      onClick={() => onDelete(o.uid)}
+                      className="abtn abtn-r"
+                      style={{ padding: '5px 12px', fontSize: 12 }}
+                      title="Clear all credits"
+                      onClick={() => onDeductCredit(o.uid, o.credits ?? 0)}
                     >
-                      <Trash2 size={13} />
+                      Clear
                     </button>
                   </td>
-
                 </tr>
               ))}
               {approved.length === 0 && (
