@@ -259,7 +259,7 @@ export default function AdminPage() {
 
   const views = {
     overview: <OverviewView stats={stats} setTab={handleSetTab} />,
-    officers: <OfficersView officers={officers} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
+    officers: <OfficersView officers={officers} links={links} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
     links: <LinksView links={links} onLoadMore={loadMoreLinks} hasMore={hasMoreLinks} loadingMore={loadingMore} onOfficerClick={(uid) => { setHighlightUid(uid); setTab('officers') }} />,
     credits: <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
     coupons: <CouponsView showToast={showToast} />,
