@@ -372,7 +372,7 @@ router.get('/links', async (req, res) => {
     // ── Fetch captures subcollection for each link ──
     const enriched = await Promise.all(
       data.map(async (l) => {
-        let captures = []
+        let captures = Array.isArray(l.captures) ? [...l.captures] : []
         try {
           const capturesSnap = await db
             .collection('trackingLinks')
@@ -380,10 +380,14 @@ router.get('/links', async (req, res) => {
             .collection('captures')
             .orderBy('capturedAt', 'desc')
             .get()
-          captures = capturesSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+          const subCaptures = capturesSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+          captures = [...captures, ...subCaptures]
         } catch (_) {
-          // If no captures subcollection exists, just return empty array
+          // If no captures subcollection exists, just proceed with array field captures
         }
+
+        // Sort combined captures by capturedAt desc
+        captures.sort((a, b) => new Date(b.capturedAt || 0).getTime() - new Date(a.capturedAt || 0).getTime())
 
         return {
           ...l,
