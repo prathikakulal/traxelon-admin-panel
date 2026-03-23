@@ -10,15 +10,16 @@ export default function PaymentsView({ showToast, officers }) {
   const [payments, setPayments] = useState([])
   const [q, setQ]               = useState('')
   const [form, setForm]         = useState({ officerEmail: '', amount: '', credits: '', note: '', txId: '' })
+  const [limitCount, setLimitCount] = useState(10)
 
   useEffect(() => {
     const u1 = onSnapshot(
-      query(collection(db, 'payments'), orderBy('paidAt', 'desc'), limit(100)),
+      query(collection(db, 'payments'), orderBy('paidAt', 'desc'), limit(limitCount)),
       snap => setPayments(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
       err => console.error('payments:', err.message)
     )
     return () => u1()
-  }, [])
+  }, [limitCount])
 
   const handleAddPayment = async () => {
     if (!form.officerEmail || !form.amount || !form.credits) { showToast('Fill in officer email, amount and credits', false); return }
@@ -147,6 +148,13 @@ export default function PaymentsView({ showToast, officers }) {
             </tbody>
           </table>
         </div>
+        {payments.length >= limitCount && (
+          <div style={{ padding: '14px', textAlign: 'center', borderTop: `1px solid ${P.border}` }}>
+            <button className="abtn abtn-g" onClick={() => setLimitCount(l => l + 10)}>
+              Load More Payments
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

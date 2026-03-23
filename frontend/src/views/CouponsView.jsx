@@ -14,15 +14,16 @@ export default function CouponsView({ showToast }) {
   const [maxUses, setMaxUses] = useState('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied]   = useState(null)
+  const [limitCount, setLimitCount] = useState(10)
 
   useEffect(() => {
     const unsub = onSnapshot(
-      query(collection(db, 'coupons'), orderBy('createdAt', 'desc'), limit(100)),
+      query(collection(db, 'coupons'), orderBy('createdAt', 'desc'), limit(limitCount)),
       snap => setCoupons(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
       err => console.error('coupons:', err.message)
     )
     return unsub
-  }, [])
+  }, [limitCount])
 
   const generateCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -167,6 +168,13 @@ export default function CouponsView({ showToast }) {
             </tbody>
           </table>
         </div>
+        {coupons.length >= limitCount && (
+          <div style={{ padding: '14px', textAlign: 'center', borderTop: `1px solid ${P.border}` }}>
+            <button className="abtn abtn-g" onClick={() => setLimitCount(l => l + 10)}>
+              Load More Coupons
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
