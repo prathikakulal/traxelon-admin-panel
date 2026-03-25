@@ -1,15 +1,17 @@
 // backend/routes/admin.js
-import { Hono } from 'hono'
-import { getAdmin } from '../firebase/admin.js'
-import { AggregateField } from 'firebase-admin/firestore'
+// Admin API routes — served via Firebase Admin SDK (bypasses Firestore security rules)
 
-const router = new Hono()
+const express = require('express')
+const { getAdmin } = require('../firebase/admin')
+const { AggregateField } = require('firebase-admin/firestore')
+
+const router = express.Router()
 
 // ── Health / status ───────────────────────────────────────────────────────────
 router.get('/status', (c) => {
   return c.json({
     service: 'traxelon-admin-backend',
-    version: '1.0.0',
+    version: '1.3.0 (Worker REST)',
     ts: new Date().toISOString(),
   })
 })
@@ -17,7 +19,7 @@ router.get('/status', (c) => {
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
 router.get('/users', async (c) => {
   try {
-    const cursor = c.req.query('cursor')
+    const { cursor } = req.query
     const db = getAdmin().firestore()
     let query = db.collection('users').orderBy('createdAt', 'desc').limit(20)
 
@@ -28,7 +30,7 @@ router.get('/users', async (c) => {
 
     const snap = await query.get()
     const data = snap.docs.map(d => ({ uid: d.id, ...d.data() }))
-    return c.json(data)
+    res.json(data)
   } catch (err) {
     console.error('[admin/users]', err.message)
     return c.json({ error: err.message }, 500)
@@ -38,7 +40,7 @@ router.get('/users', async (c) => {
 // ── GET /api/admin/links ──────────────────────────────────────────────────────
 router.get('/links', async (c) => {
   try {
-    const cursor = c.req.query('cursor')
+    const { cursor } = req.query
     const db = getAdmin().firestore()
     let query = db.collection('trackingLinks').orderBy('createdAt', 'desc').limit(20)
 
@@ -50,6 +52,7 @@ router.get('/links', async (c) => {
     const snap = await query.get()
     const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
 
+    // Enrich with creator info: collect unique UIDs, batch-fetch users
     const uids = [...new Set(data.map(l => l.uid).filter(Boolean))]
     const userMap = {}
     if (uids.length > 0) {
@@ -66,6 +69,7 @@ router.get('/links', async (c) => {
       )
     }
 
+    // ── Fetch captures subcollection for each link ──
     const enriched = await Promise.all(
       data.map(async (l) => {
         let captures = Array.isArray(l.captures) ? [...l.captures] : []
@@ -78,8 +82,11 @@ router.get('/links', async (c) => {
             .get()
           const subCaptures = capturesSnap.docs.map(d => ({ id: d.id, ...d.data() }))
           captures = [...captures, ...subCaptures]
-        } catch (_) { }
+        } catch (_) {
+          // If no captures subcollection exists, just proceed with array field captures
+        }
 
+        // Sort combined captures by capturedAt desc
         captures.sort((a, b) => new Date(b.capturedAt || 0).getTime() - new Date(a.capturedAt || 0).getTime())
 
         return {
@@ -100,24 +107,29 @@ router.get('/links', async (c) => {
 // ── DELETE /api/admin/users/:uid ──────────────────────────────────────────────
 router.delete('/users/:uid', async (c) => {
   try {
-    const uid = c.req.param('uid')
+    const { uid } = req.params
     const adminApp = getAdmin()
     const db = adminApp.firestore()
 
+    // 1. Delete user from Firebase Authentication
     try {
       await adminApp.auth().deleteUser(uid)
     } catch (e) {
+      // If user doesn't exist in Auth, we can still proceed to clean up Firestore
       if (e.code !== 'auth/user-not-found') throw e
     }
 
+    // 2. Delete all documents in the user's `sessions` subcollection
     const sessionsSnap = await db.collection('users').doc(uid).collection('sessions').get()
     const batch = db.batch()
     sessionsSnap.docs.forEach(doc => {
       batch.delete(doc.ref)
     })
 
+    // 3. Delete the main `users` document
     batch.delete(db.collection('users').doc(uid))
 
+    // 4. Update the global stats
     const statsRef = db.collection('metadata').doc('dashboardStats')
     const userSnap = await db.collection('users').doc(uid).get()
     if (userSnap.exists) {
@@ -130,7 +142,8 @@ router.delete('/users/:uid', async (c) => {
     }
 
     await batch.commit()
-    return c.json({ success: true, message: 'Officer and credentials permanently deleted' })
+    res.json({ success: true, message: 'Officer and credentials permanently deleted' })
+
   } catch (err) {
     console.error('[admin/deleteUser]', err.message)
     return c.json({ error: err.message }, 500)
@@ -140,16 +153,14 @@ router.delete('/users/:uid', async (c) => {
 // ── GET /api/admin/activity ───────────────────────────────────────────────────
 router.get('/activity', async (c) => {
   try {
-    const cursor = c.req.query('cursor')
+    const { cursor } = req.query
     const db = getAdmin().firestore()
 
-    let usersQuery = db.collection('users').orderBy('lastSeen', 'desc').limit(10)
-
-    if (cursor) {
-      usersQuery = usersQuery.startAfter(new Date(cursor))
-    }
-
-    const recentUsersSnap = await usersQuery.get()
+    // Simplified: Fetch recent users and their sessions
+    const usersSnap = await db.collection('users').get()
+    const users = usersSnap.docs.map(d => d.data())
+    users.sort((a, b) => new Date(b.lastSeen || 0).getTime() - new Date(a.lastSeen || 0).getTime())
+    
     const allEvents = []
 
     const sessionPromises = recentUsersSnap.docs.map(async (uDoc) => {
@@ -198,21 +209,20 @@ router.get('/activity', async (c) => {
     })
 
     await Promise.all(sessionPromises)
+
     allEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
-    return c.json(allEvents.slice(0, 20))
+    res.json(allEvents.slice(0, 20))
   } catch (err) {
     console.error('[admin/activity]', err.message)
-    return c.json({ error: err.message }, 500)
+    res.status(500).json({ error: err.message })
   }
 })
 
 // ── DELETE /api/admin/activity/:uid/:sessionId/:type ──────────────────────────
-router.delete('/activity/:uid/:sessionId/:type', async (c) => {
+router.delete('/activity/:uid/:sessionId/:type', async (req, res) => {
   try {
-    const uid = c.req.param('uid')
-    const sessionId = c.req.param('sessionId')
-    const type = c.req.param('type')
+    const { uid, sessionId, type } = req.params
     const admin = getAdmin()
     const db = admin.firestore()
 
@@ -232,38 +242,26 @@ router.delete('/activity/:uid/:sessionId/:type', async (c) => {
       }
     }
 
-    return c.json({ success: true })
+    res.json({ success: true })
   } catch (err) {
-    console.error(`[admin/activity delete] ${c.req.param('sessionId')}`, err.message)
-    return c.json({ error: err.message }, 500)
+    console.error(`[admin/activity delete] ${req.params.sessionId}`, err.message)
+    res.status(500).json({ error: err.message })
   }
 })
 
 // ── GET /api/admin/stats ──────────────────────────────────────────────────────
 router.get('/stats', async (c) => {
   try {
-    const db = getAdmin().firestore()
+    const admin = getAdmin(c.env)
+    const db = admin.firestore()
 
-    const [
-      allUsersSnap,
-      adminSnap,
-      pendingSnap,
-      rejectedSnap,
-      linksSnap,
-      creditsSnap,
-      cachedSnap,
-    ] = await Promise.all([
-      db.collection('users').count().get(),
-      db.collection('users').where('isAdmin', '==', true).count().get(),
-      db.collection('users').where('status', '==', 'pending').count().get(),
-      db.collection('users').where('status', '==', 'rejected').count().get(),
-      db.collection('trackingLinks').count().get(),
-      db.collection('users').aggregate({ total: AggregateField.sum('credits') }).get(),
-      db.collection('metadata').doc('dashboardStats').get(),
-    ])
-
-    const totalOfficers = allUsersSnap.data().count - adminSnap.data().count
-    const pending = pendingSnap.data().count + rejectedSnap.data().count
+    const usersSnap = await db.collection('users').get()
+    const linksSnap = await db.collection('trackingLinks').get()
+    
+    const users = usersSnap.docs.map(d => d.data())
+    const totalOfficers = users.filter(u => !u.isAdmin).length
+    const adminCount = users.length - totalOfficers
+    const pending = users.filter(u => u.status === 'pending' || u.status === 'rejected').length
     const approved = Math.max(0, totalOfficers - pending)
     const totalCredits = creditsSnap.data().total || 0
     const totalLinks = linksSnap.data().count
@@ -273,7 +271,7 @@ router.get('/stats', async (c) => {
 
     db.collection('metadata').doc('dashboardStats').set(stats, { merge: true }).catch(() => { })
 
-    return c.json(stats)
+    res.json(stats)
   } catch (err) {
     console.error('[admin/stats]', err.message)
     return c.json({ error: err.message }, 500)
