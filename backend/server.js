@@ -1,32 +1,45 @@
 // backend/server.js
-require('dotenv').config()
+import { Buffer } from 'node:buffer'
+import process from 'node:process'
 
-const express = require('express')
-const cors    = require('cors')
-const adminRoutes = require('./routes/admin')
+globalThis.Buffer = Buffer
+globalThis.process = process
 
-const app  = express()
-const PORT = process.env.PORT || 5000
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import adminRoutes from './routes/admin.js'
+
+const app = new Hono()
 
 // ── Middleware ────────────────────────────────────────────
-app.use(express.json())
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+const ALLOWED_ORIGINS = [
+  'https://traxelon-admin.vercel.app',
+  'http://localhost:5173'
+]
+
+app.use('*', cors({
+  origin: (origin) => {
+    if (ALLOWED_ORIGINS.includes(origin)) return origin
+    return ALLOWED_ORIGINS[0]
+  },
   credentials: true,
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
 }))
 
 // ── Routes ───────────────────────────────────────────────
-app.use('/api/admin', adminRoutes)
-
+app.get('/', (c) => c.text('Traxelon Admin API is running!'))
+app.route('/api/admin', adminRoutes)
 
 // 404 fallback
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Route not found' })
+app.all('*', (c) => {
+  return c.json({ error: 'Route not found' }, 404)
 })
 
-// ── Start ─────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`\n🚀  Traxelon Admin Backend running on http://localhost:${PORT}\n`)
-})
+// ── Export for Cloudflare Workers ─────────────────────────
+export default app
 
-module.exports = app
+// ── Local Dev (Optional) ──────────────────────────────────
+if (typeof process !== 'undefined' && process.env.PHASE === 'development') {
+    // npx wrangler dev
+}

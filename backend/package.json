@@ -2,8 +2,8 @@
     "name": "traxelon-admin-backend",
     "version": "1.0.0",
     "description": "Traxelon Admin – Express API backend",
-    "type": "module",
-    "main": "index.js",
+    "type": "commonjs",
+    "main": "server.js",
     "scripts": {
         "start": "node index.js",
         "dev": "wrangler dev",
@@ -17,7 +17,6 @@
         "jose": "^6.2.2"
     },
     "devDependencies": {
-        "nodemon": "^3.1.0",
-        "wrangler": "^4.77.0"
+        "nodemon": "^3.1.0"
     }
 }
