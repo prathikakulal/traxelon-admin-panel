@@ -1,60 +1,156 @@
 // backend/firebase/admin.js
 //
-// Firebase Admin SDK — lazy singleton.
-// Call getAdmin() when you need the admin instance.
-// This avoids crashing on startup if credentials aren't configured yet.
+// Firebase Admin REST Helper for Cloudflare Workers.
+// Bypasses the 'firebase-admin' SDK and verifies ID Tokens using 'jose'.
 
-const admin = require('firebase-admin')
+import { createLocalJWKSet, jwtVerify } from 'jose'
 
-function getAdmin() {
-    if (admin.apps.length) return admin
+let jwkSetCache = null;
 
-    let credential
+/**
+ * Signs a JWT for Google OAuth2 using the service account's private key.
+ */
+async function signJWT(serviceAccount) {
+    const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).replace(/=/g, '');
+    const now = Math.floor(Date.now() / 1000);
+    const payload = btoa(JSON.stringify({
+        iss: serviceAccount.client_email,
+        scope: 'https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email',
+        aud: 'https://oauth2.googleapis.com/token',
+        exp: now + 3600,
+        iat: now
+    })).replace(/=/g, '');
 
-    // if (process.env.FIREBASE_SERVICE_ACCOUNT_B64) {
-    //     // Option A: base64-encoded JSON string (handy for cloud env vars)
-    //     const json = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_B64, 'base64').toString('utf8')
-    //     credential = admin.credential.cert(JSON.parse(json))
-    // }
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_B64) {
-        try {
-            let json = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_B64, 'base64').toString('utf8')
-            
-            // Strip out invisible BOM, trailing null characters, or extra whitespace
-            // by finding the first '{' and the last '}'
-            const firstBrace = json.indexOf('{')
-            const lastBrace = json.lastIndexOf('}')
-            if (firstBrace !== -1 && lastBrace !== -1) {
-                json = json.substring(firstBrace, lastBrace + 1)
-            }
+    const message = `${header}.${payload}`;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(message);
 
-            credential = admin.credential.cert(JSON.parse(json))
-        } catch (err) {
-            console.warn('⚠️ Warning: Failed to parse FIREBASE_SERVICE_ACCOUNT_B64 string as JSON. Falling back to next credential method...')
-        }
-    } 
-    
-    if (!credential && process.env.FIREBASE_SERVICE_ACCOUNT_PATH && require('fs').existsSync(process.env.FIREBASE_SERVICE_ACCOUNT_PATH)) {
-        // Option B: path to the downloaded JSON file (only if the file actually exists)
-        const serviceAccount = require(require('path').resolve(process.env.FIREBASE_SERVICE_ACCOUNT_PATH))
-        credential = admin.credential.cert(serviceAccount)
-    } 
-    
-    if (!credential) {
-        // Option C: Application Default Credentials (works on GCP / Cloud Run)
-        try {
-            credential = admin.credential.applicationDefault()
-        } catch (err) {
-            console.error("Critical: Could not initialize Firebase credentials.")
-        }
-    }
+    const pemContents = serviceAccount.private_key
+        .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+        .replace(/-----END PRIVATE KEY-----/g, '')
+        .replace(/\s/g, '');
+    const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
 
-    admin.initializeApp({
-        credential,
-        projectId: process.env.FIREBASE_PROJECT_ID ? process.env.FIREBASE_PROJECT_ID.trim() : undefined,
-    })
+    const key = await crypto.subtle.importKey(
+        'pkcs8',
+        binaryKey.buffer,
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+        false,
+        ['sign']
+    );
 
-    return admin
+    const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, data);
+    const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+    return `${message}.${signatureBase64}`;
 }
 
-module.exports = { getAdmin }
+async function getAccessToken(env) {
+    const b64 = env.FIREBASE_SERVICE_ACCOUNT_B64 || process.env.FIREBASE_SERVICE_ACCOUNT_B64;
+    if (!b64) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_B64');
+    const serviceAccount = JSON.parse(atob(b64));
+    const jwt = await signJWT(serviceAccount);
+    const resp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
+    });
+    const data = await resp.json();
+    return data.access_token;
+}
+
+/**
+ * Verifies a Firebase ID Token using Google's public JWKS.
+ */
+export async function verifyIdToken(token, projectId) {
+    if (!jwkSetCache) {
+        // Fetch and parse Google's public certificates into a JWK Set
+        const resp = await fetch('https://www.googleapis.com/robot/v1/metadata/jwk/securetoken@system.gserviceaccount.com');
+        const jwks = await resp.json();
+        jwkSetCache = createLocalJWKSet(jwks);
+    }
+    
+    // Verify the JWT signature and basic claims (aud, iss, exp)
+    const { payload } = await jwtVerify(token, jwkSetCache, {
+        issuer: `https://securetoken.google.com/${projectId}`,
+        audience: projectId,
+    });
+    
+    return payload;
+}
+
+export function getAdmin(env) {
+    const projectId = env.FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || 'traxelon-final';
+    const baseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
+
+    const request = async (path, options = {}) => {
+        const token = await getAccessToken(env);
+        const url = `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+        const resp = await fetch(url, {
+            ...options,
+            headers: {
+                ...options.headers,
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error.message || 'Firestore REST Error');
+        return data;
+    };
+
+    const mapDoc = (doc) => {
+        const fields = doc.fields || {};
+        const res = { id: doc.name.split('/').pop() };
+        for (const [key, val] of Object.entries(fields)) {
+            if (val.stringValue !== undefined) res[key] = val.stringValue;
+            else if (val.integerValue !== undefined) res[key] = parseInt(val.integerValue, 10);
+            else if (val.doubleValue !== undefined) res[key] = parseFloat(val.doubleValue);
+            else if (val.booleanValue !== undefined) res[key] = val.booleanValue;
+            else if (val.timestampValue !== undefined) res[key] = val.timestampValue;
+            else if (val.mapValue !== undefined) res[key] = val.mapValue.fields; 
+            else if (val.arrayValue !== undefined) res[key] = (val.arrayValue.values || []).map(v => Object.values(v)[0]);
+            else res[key] = val;
+        }
+        return res;
+    };
+
+    return {
+        firestore: () => ({
+            collection: (col) => ({
+                doc: (id) => ({
+                    get: async () => {
+                        const d = await request(`${col}/${id}`);
+                        return { exists: !!d.name, data: () => mapDoc(d) };
+                    },
+                    delete: () => request(`${col}/${id}`, { method: 'DELETE' }),
+                    collection: (sub) => ({
+                        get: async () => {
+                            const data = await request(`${col}/${id}/${sub}?pageSize=100`);
+                            return { docs: (data.documents || []).map(d => ({ id: d.name.split('/').pop(), data: () => mapDoc(d) })) };
+                        }
+                    })
+                }),
+                get: async () => {
+                    const data = await request(`${col}?pageSize=100`);
+                    return { docs: (data.documents || []).map(d => ({ id: d.name.split('/').pop(), data: () => mapDoc(d) })) };
+                }
+            }),
+            batch: () => ({ commit: () => {} })
+        }),
+        auth: () => ({
+            deleteUser: async (uid) => {
+                const token = await getAccessToken(env);
+                await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:delete`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ localId: uid })
+                });
+            }
+        }),
+        FieldValue: { increment: (n) => ({ integerValue: n }), delete: () => null }
+    };
+}
+
+export default { getAdmin, verifyIdToken };

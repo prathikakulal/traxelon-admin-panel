@@ -1,0 +1,11 @@
+name = "traxelon-admin-backend"
+main = "index.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = [ "nodejs_compat", "allow_eval_during_startup" ]
+
+[build]
+minify = false
+
+[vars]
+# Add non-sensitive vars here if needed
+# FIREBASE_PROJECT_ID = "traxelon-final"

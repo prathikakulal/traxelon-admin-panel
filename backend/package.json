@@ -2,19 +2,22 @@
     "name": "traxelon-admin-backend",
     "version": "1.0.0",
     "description": "Traxelon Admin – Express API backend",
-    "type": "commonjs",
-    "main": "server.js",
+    "type": "module",
+    "main": "index.js",
     "scripts": {
-        "start": "node server.js",
-        "dev": "nodemon server.js"
+        "start": "node index.js",
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy"
     },
     "dependencies": {
+        "@hono/node-server": "^1.8.2",
         "cors": "^2.8.6",
-        "dotenv": "^16.6.1",
-        "express": "^4.22.1",
-        "firebase-admin": "^12.1.0"
+        "dotenv": "^16.4.5",
+        "hono": "^4.1.0",
+        "jose": "^6.2.2"
     },
     "devDependencies": {
-        "nodemon": "^3.1.0"
+        "nodemon": "^3.1.0",
+        "wrangler": "^4.77.0"
     }
 }
