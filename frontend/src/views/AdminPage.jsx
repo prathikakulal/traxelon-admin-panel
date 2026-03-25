@@ -66,10 +66,13 @@ export default function AdminPage() {
     if (!authed) return
     setLoading(true)
     try {
+      const token = await auth.currentUser?.getIdToken()
+      const headers = { 'Authorization': `Bearer ${token}` }
+      
       const [statsRes, usersRes, linksRes] = await Promise.all([
-        fetch(`${API}/api/admin/stats`),
-        fetch(`${API}/api/admin/users`),
-        fetch(`${API}/api/admin/links`),
+        fetch(`${API}/api/admin/stats`, { headers }),
+        fetch(`${API}/api/admin/users`, { headers }),
+        fetch(`${API}/api/admin/links`, { headers }),
       ])
       if (!statsRes.ok) throw new Error(`Stats fetch failed: ${statsRes.status} ${statsRes.statusText}`)
       if (!usersRes.ok) throw new Error(`Users fetch failed: ${usersRes.status} ${usersRes.statusText}`)
@@ -185,7 +188,11 @@ export default function AdminPage() {
   const handleDelete = async (uid) => {
     if (!window.confirm('Permanently delete this officer? This will also remove their login credentials and activity logs.')) return
     try { 
-      const res = await fetch(`${API}/api/admin/users/${uid}`, { method: 'DELETE' })
+      const token = await auth.currentUser?.getIdToken()
+      const res = await fetch(`${API}/api/admin/users/${uid}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.error || 'Failed to delete user')
@@ -214,8 +221,10 @@ export default function AdminPage() {
     if (officers.length === 0 || loadingMore || !hasMoreOfficers) return
     setLoadingMore(true)
     try {
+      const token = await auth.currentUser?.getIdToken()
+      const headers = { 'Authorization': `Bearer ${token}` }
       const cursor = officers[officers.length - 1].uid
-      const res = await fetch(`${API}/api/admin/users?cursor=${cursor}`)
+      const res = await fetch(`${API}/api/admin/users?cursor=${cursor}`, { headers })
       const more = await res.json()
       if (more.length > 0) setOfficers(p => [...p, ...more])
       if (more.length < 20) setHasMoreOfficers(false)
@@ -227,8 +236,10 @@ export default function AdminPage() {
     if (links.length === 0 || loadingMore || !hasMoreLinks) return
     setLoadingMore(true)
     try {
+      const token = await auth.currentUser?.getIdToken()
+      const headers = { 'Authorization': `Bearer ${token}` }
       const cursor = links[links.length - 1].id
-      const res = await fetch(`${API}/api/admin/links?cursor=${cursor}`)
+      const res = await fetch(`${API}/api/admin/links?cursor=${cursor}`, { headers })
       const more = await res.json()
       if (more.length > 0) setLinks(p => [...p, ...more])
       if (more.length < 20) setHasMoreLinks(false)
