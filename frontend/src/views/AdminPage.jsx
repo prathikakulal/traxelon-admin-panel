@@ -15,6 +15,7 @@ import { signOut } from 'firebase/auth'
 
 const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'
 import { Toast } from '../components/UI.jsx'
+import { fetchWithAuth, logout } from '../utils/api.js'
 import AdminLoginView from '../components/AdminLoginView.jsx'
 import OverviewView from './OverviewView.jsx'
 import OfficersView from './OfficersView.jsx'
@@ -66,23 +67,16 @@ export default function AdminPage() {
     if (!authed) return
     setLoading(true)
     try {
-      const token = await auth.currentUser?.getIdToken()
-      const headers = { 'Authorization': `Bearer ${token}` }
-      
-      const [statsRes, usersRes, linksRes] = await Promise.all([
-        fetch(`${API}/api/admin/stats`, { headers }),
-        fetch(`${API}/api/admin/users`, { headers }),
-        fetch(`${API}/api/admin/links`, { headers }),
+      const [statsData, usersData, linksData] = await Promise.all([
+        fetchWithAuth('/api/admin/stats'),
+        fetchWithAuth('/api/admin/users'),
+        fetchWithAuth('/api/admin/links'),
       ])
-      if (!statsRes.ok) throw new Error(`Stats fetch failed: ${statsRes.status} ${statsRes.statusText}`)
-      if (!usersRes.ok) throw new Error(`Users fetch failed: ${usersRes.status} ${usersRes.statusText}`)
-      if (!linksRes.ok) throw new Error(`Links fetch failed: ${linksRes.status} ${linksRes.statusText}`)
-      const [statsData, usersData, linksData] = await Promise.all([statsRes.json(), usersRes.json(), linksRes.json()])
       setStats(statsData)
       setOfficers(usersData)
       setLinks(linksData)
-      if (usersData.length < 20) setHasMoreOfficers(false)
-      if (linksData.length < 20) setHasMoreLinks(false)
+      if (usersData?.length < 20) setHasMoreOfficers(false)
+      if (linksData?.length < 20) setHasMoreLinks(false)
       setFetchError(null)
     } catch (err) {
       console.error('Data fetch error:', err.message)
@@ -188,15 +182,7 @@ export default function AdminPage() {
   const handleDelete = async (uid) => {
     if (!window.confirm('Permanently delete this officer? This will also remove their login credentials and activity logs.')) return
     try { 
-      const token = await auth.currentUser?.getIdToken()
-      const res = await fetch(`${API}/api/admin/users/${uid}`, { 
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Failed to delete user')
-      }
+      await fetchWithAuth(`/api/admin/users/${uid}`, { method: 'DELETE' })
       
       // Update local state without refresh
       setOfficers(prev => prev.filter(x => x.uid !== uid))
@@ -208,26 +194,17 @@ export default function AdminPage() {
 
   const handleLogout = async () => {
     try { await auth.signOut() } catch (e) { }
-    sessionStorage.removeItem('adminAuthed')
-    sessionStorage.removeItem('adminProfile')
-    setAdminProfile(null)
-    setAuthed(false)
-    setStats(null)
-    setOfficers([])
-    setLinks([])
+    logout()
   }
 
   const loadMoreOfficers = async () => {
     if (officers.length === 0 || loadingMore || !hasMoreOfficers) return
     setLoadingMore(true)
     try {
-      const token = await auth.currentUser?.getIdToken()
-      const headers = { 'Authorization': `Bearer ${token}` }
       const cursor = officers[officers.length - 1].uid
-      const res = await fetch(`${API}/api/admin/users?cursor=${cursor}`, { headers })
-      const more = await res.json()
-      if (more.length > 0) setOfficers(p => [...p, ...more])
-      if (more.length < 20) setHasMoreOfficers(false)
+      const more = await fetchWithAuth(`/api/admin/users?cursor=${cursor}`)
+      if (more?.length > 0) setOfficers(p => [...p, ...more])
+      if (more?.length < 20) setHasMoreOfficers(false)
     } catch (e) { showToast(e.message, false) }
     finally { setLoadingMore(false) }
   }
@@ -236,13 +213,10 @@ export default function AdminPage() {
     if (links.length === 0 || loadingMore || !hasMoreLinks) return
     setLoadingMore(true)
     try {
-      const token = await auth.currentUser?.getIdToken()
-      const headers = { 'Authorization': `Bearer ${token}` }
       const cursor = links[links.length - 1].id
-      const res = await fetch(`${API}/api/admin/links?cursor=${cursor}`, { headers })
-      const more = await res.json()
-      if (more.length > 0) setLinks(p => [...p, ...more])
-      if (more.length < 20) setHasMoreLinks(false)
+      const more = await fetchWithAuth(`/api/admin/users?cursor=${cursor}`)
+      if (more?.length > 0) setLinks(p => [...p, ...more])
+      if (more?.length < 20) setHasMoreLinks(false)
     } catch (e) { showToast(e.message, false) }
     finally { setLoadingMore(false) }
   }
@@ -259,9 +233,10 @@ export default function AdminPage() {
 
   if (!authed) {
     return (
-      <AdminLoginView onLoginSuccess={(profile) => {
+      <AdminLoginView onLoginSuccess={(profile, token) => {
         sessionStorage.setItem('adminAuthed', 'true')
         sessionStorage.setItem('adminProfile', JSON.stringify(profile))
+        localStorage.setItem('adminToken', token)
         setAdminProfile(profile)
         setAuthed(true)
       }} />
@@ -416,3 +391,5 @@ export default function AdminPage() {
     </>
   )
 }
+
+

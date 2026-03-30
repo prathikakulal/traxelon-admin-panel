@@ -30,7 +30,8 @@ export default function AdminLoginView({ onLoginSuccess }) {
         setError('Access denied. Admins only.')
         shake(); setLoad(false); return
       }
-      onLoginSuccess(snap.data())
+      const token = await cred.user.getIdToken()
+      onLoginSuccess(snap.data(), token)
     } catch (e) {
       const msgs = {
         'auth/user-not-found': 'No account found with this email.',

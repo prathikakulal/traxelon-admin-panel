@@ -1,5 +1,5 @@
 // src/views/LinksView.jsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, ChevronDown, ChevronUp, MapPin, Clock, User } from 'lucide-react'
 import { SBadge } from '../components/UI.jsx'
 import { P } from '../styles/theme.js'
@@ -16,17 +16,40 @@ function formatIST(raw) {
   })
 }
 
+const LV_CSS = `
+  .l-exp-wrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .l-exp-wrapper.open {
+    grid-template-rows: 1fr;
+  }
+  .l-exp-content {
+    overflow: hidden;
+  }
+  .chev {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .chev.open {
+    transform: rotate(180deg);
+  }
+`
+
 function DataRow({ label, value }) {
   if (!value) return null
+  // Ensure value is a string or number for React to render safely
+  const val = (typeof value === 'object') ? JSON.stringify(value) : value
   return (
     <div>
       <div style={{ fontSize: 9, color: P.muted, fontFamily: "'JetBrains Mono',monospace", textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>{label}</div>
-      <div style={{ fontSize: 12, color: P.txt, fontFamily: "'JetBrains Mono',monospace", wordBreak: 'break-all' }}>{value}</div>
+      <div style={{ fontSize: 12, color: P.txt, fontFamily: "'JetBrains Mono',monospace", wordBreak: 'break-all' }}>{val}</div>
     </div>
   )
 }
 
 function CaptureCard({ c, i }) {
+  if (!c) return null
   return (
     <div style={{ background: P.surf, border: `1px solid ${P.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 10 }}>
 
@@ -50,7 +73,9 @@ function CaptureCard({ c, i }) {
           </div>
 
           {(c.gpsAddress || c.address) && (
-            <div style={{ fontSize: 11, color: P.txt2, fontFamily: "'JetBrains Mono',monospace", marginBottom: 10 }}>{c.gpsAddress || c.address}</div>
+            <div style={{ fontSize: 11, color: P.txt2, fontFamily: "'JetBrains Mono',monospace", marginBottom: 10 }}>
+              {typeof (c.gpsAddress || c.address) === 'object' ? JSON.stringify(c.gpsAddress || c.address) : (c.gpsAddress || c.address)}
+            </div>
           )}
 
           {/* map embed */}
@@ -94,6 +119,14 @@ function CaptureCard({ c, i }) {
 export default function LinksView({ links, onLoadMore, hasMore, loadingMore, onOfficerClick }) {
   const [q, setQ] = useState('')
   const [expanded, setExp] = useState(null)
+
+  // Inject CSS
+  useEffect(() => {
+    const el = document.createElement('style')
+    el.textContent = LV_CSS
+    document.head.appendChild(el)
+    return () => document.head.removeChild(el)
+  }, [])
 
   const rows = links.filter(l =>
     (l.token || '').includes(q) ||
@@ -151,24 +184,29 @@ export default function LinksView({ links, onLoadMore, hasMore, loadingMore, onO
                   <div style={{ fontSize: 18, fontFamily: "'Bebas Neue',cursive", color: l.captures?.length > 0 ? P.green : P.muted }}>{l.captures?.length || 0}</div>
                   <div style={{ fontSize: 9, color: P.muted, fontFamily: "'JetBrains Mono',monospace" }}>CAPTURES</div>
                 </div>
-                <div style={{ color: P.muted }}>
-                  {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                <div className={`chev${isOpen ? ' open' : ''}`} style={{ color: P.muted }}>
+                  <ChevronDown size={15} />
                 </div>
               </div>
             </div>
 
-            {/* ── Expanded capture details ── */}
-            {isOpen && (
-              <div style={{ borderTop: `1px solid ${P.border}`, padding: '14px 18px' }}>
-                {l.captures?.length > 0 ? (
-                  l.captures.map((c, i) => <CaptureCard key={i} c={c} i={i} />)
-                ) : (
-                  <div style={{ fontSize: 12, color: P.muted, fontFamily: "'DM Sans',sans-serif", padding: '8px 0' }}>
-                    No captures yet for this link.
+            {/* ── Expanded capture details (Sliding) ── */}
+            <div className={`l-exp-wrapper${isOpen ? ' open' : ''}`}>
+              <div className="l-exp-content">
+                {/* Only render sub-content if open OR slightly before to allow for slide calculation */}
+                {(isOpen || expanded === l.id) && (
+                  <div style={{ borderTop: `1px solid ${P.border}`, padding: '14px 18px' }}>
+                    {l.captures?.length > 0 ? (
+                      l.captures.map((c, i) => <CaptureCard key={i} c={c} i={i} />)
+                    ) : (
+                      <div style={{ fontSize: 12, color: P.muted, fontFamily: "'DM Sans',sans-serif", padding: '8px 0' }}>
+                        No captures yet for this link.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
         )
       })}

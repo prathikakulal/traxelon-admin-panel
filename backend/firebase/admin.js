@@ -85,18 +85,33 @@ export function getAdmin(env) {
         return data;
     };
 
+    const mapValue = (v) => {
+        if (!v) return null;
+        if (v.stringValue !== undefined) return v.stringValue;
+        if (v.integerValue !== undefined) return parseInt(v.integerValue, 10);
+        if (v.doubleValue !== undefined) return parseFloat(v.doubleValue);
+        if (v.booleanValue !== undefined) return v.booleanValue;
+        if (v.timestampValue !== undefined) return v.timestampValue;
+        if (v.nullValue !== undefined) return null;
+        if (v.mapValue !== undefined) {
+            const mFields = v.mapValue.fields || {};
+            const mRes = {};
+            for (const [mk, mv] of Object.entries(mFields)) {
+                mRes[mk] = mapValue(mv);
+            }
+            return mRes;
+        }
+        if (v.arrayValue !== undefined) {
+            return (v.arrayValue.values || []).map(mapValue);
+        }
+        return v;
+    };
+
     const mapDoc = (doc) => {
         const fields = doc.fields || {};
         const res = { id: doc.name.split('/').pop() };
         for (const [key, val] of Object.entries(fields)) {
-            if (val.stringValue !== undefined) res[key] = val.stringValue;
-            else if (val.integerValue !== undefined) res[key] = parseInt(val.integerValue, 10);
-            else if (val.doubleValue !== undefined) res[key] = parseFloat(val.doubleValue);
-            else if (val.booleanValue !== undefined) res[key] = val.booleanValue;
-            else if (val.timestampValue !== undefined) res[key] = val.timestampValue;
-            else if (val.mapValue !== undefined) res[key] = val.mapValue.fields; 
-            else if (val.arrayValue !== undefined) res[key] = (val.arrayValue.values || []).map(v => Object.values(v)[0]);
-            else res[key] = val;
+            res[key] = mapValue(val);
         }
         return res;
     };

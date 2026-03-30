@@ -4,6 +4,7 @@ import { Search, Calendar, Trash2 } from 'lucide-react'
 import { db } from '../firebase/config.js'
 import { collection, onSnapshot, doc, deleteDoc, query, orderBy, limit } from 'firebase/firestore'
 import { SBadge, fmt } from '../components/UI.jsx'
+import { fetchWithAuth } from '../utils/api.js'
 import { P } from '../styles/theme.js'
 
 export default function ActivityView() {
@@ -22,9 +23,7 @@ export default function ActivityView() {
     const fetchActivity = async () => {
       setLoading(true)
       try {
-        const res = await fetch(`${API}/api/admin/activity`)
-        if (!res.ok) throw new Error('Failed to fetch activity logs')
-        const data = await res.json()
+        const data = await fetchWithAuth(`/api/admin/activity`)
         if (mounted) {
           setLogs(data)
           if (data.length < 20) setHasMore(false)
@@ -44,9 +43,7 @@ export default function ActivityView() {
     setLoadingMore(true)
     try {
       const cursor = logs[logs.length - 1].cursor || logs[logs.length - 1].timestamp
-      const res = await fetch(`${API}/api/admin/activity?cursor=${cursor}`)
-      if (!res.ok) throw new Error('Failed to fetch more logs')
-      const more = await res.json()
+      const more = await fetchWithAuth(`/api/admin/activity?cursor=${cursor}`)
       if (more.length > 0) {
         setLogs(prev => [...prev, ...more])
       }
@@ -64,8 +61,7 @@ export default function ActivityView() {
       const type = eventId.endsWith('-login') ? 'login' : 'logout'
       const sessionId = eventId.replace(`-${type}`, '')
 
-      const res = await fetch(`${API}/api/admin/activity/${uid}/${sessionId}/${type}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete log from server')
+      await fetchWithAuth(`/api/admin/activity/${uid}/${sessionId}/${type}`, { method: 'DELETE' })
 
       setLogs(prev => prev.filter(l => l.id !== eventId))
     } catch (err) {

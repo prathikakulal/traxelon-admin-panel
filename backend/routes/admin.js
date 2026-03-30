@@ -62,9 +62,26 @@ router.get('/links', async (c) => {
       )
     }
 
-    const enriched = paged.map(l => ({
-      ...l,
-      ...(l.uid && userMap[l.uid] ? userMap[l.uid] : {}),
+    const enriched = await Promise.all(paged.map(async l => {
+      const linkId = l.id
+      const creatorInfo = (l.uid && userMap[l.uid]) ? userMap[l.uid] : {}
+      
+      // Fetch captures sub-collection
+      let captures = []
+      try {
+        const capsSnap = await db.collection('trackingLinks').doc(linkId).collection('captures').get()
+        captures = capsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        captures.sort((a, b) => new Date(b.capturedAt || 0).getTime() - new Date(a.capturedAt || 0).getTime())
+      } catch (err) {
+        console.warn(`[admin/links] Failed to fetch captures for ${linkId}:`, err.message)
+      }
+
+      return {
+        ...l,
+        token: l.token || linkId, // Fallback if token field missing
+        ...creatorInfo,
+        captures,
+      }
     }))
 
     return c.json(enriched)
@@ -110,10 +127,119 @@ router.get('/stats', async (c) => {
     const totalCredits = users.reduce((acc, u) => acc + (parseInt(u.credits, 10) || 0), 0)
     const totalLinks = linksSnap.docs.length
     
-    const stats = { totalOfficers, approved, pending, totalCredits, totalLinks, totalCaptures: 0 }
+    // Calculate total captures across all links
+    const totalCaptures = linksSnap.docs.reduce((acc, d) => acc + (parseInt(d.data().captureCount, 10) || 0), 0)
+    
+    const stats = { totalOfficers, approved, pending, totalCredits, totalLinks, totalCaptures }
     return c.json(stats)
   } catch (err) {
     console.error('[admin/stats]', err.message)
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ── GET /api/admin/activity ──────────────────────────────────────────────────
+router.get('/activity', async (c) => {
+  try {
+    const admin = getAdmin(c.env)
+    const db = admin.firestore()
+    
+    // 1. Get all users to find their sub-collections
+    const usersSnap = await db.collection('users').get()
+    const users = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }))
+    
+    // 2. Fetch sessions from each user's sub-collection
+    let allEntries = []
+    await Promise.all(users.map(async u => {
+      try {
+        const sessionsSnap = await db.collection('users').doc(u.uid).collection('sessions').get()
+        sessionsSnap.docs.forEach(d => {
+            const s = d.data()
+            const base = {
+              uid: u.uid,
+              email: u.email || '',
+              displayName: u.displayName || u.email || 'Officer',
+              ip: s.ip || '—',
+              device: s.device || ''
+            }
+
+            // A session might be a single "log" entry with a type,
+            // or a session document that we need to split into login/logout events.
+            // Based on DB observation, type is often "login" but document contains logoutAt.
+            
+            // 1. Create Login Entry
+            allEntries.push({ 
+                ...base, 
+                id: `${d.id}-login`, 
+                type: 'login', 
+                timestamp: s.timestamp || s.loginAt || s.createdAt 
+            })
+
+            // 2. Create Logout Entry (if details exist)
+            if (s.logoutAt || s.logoutTimestamp || s.isLoggedOut || s.isOnline === false) {
+                allEntries.push({ 
+                    ...base, 
+                    id: `${d.id}-logout`, 
+                    type: 'logout', 
+                    timestamp: s.logoutAt || s.logoutTimestamp || s.lastSeen 
+                })
+            }
+        })
+      } catch (err) {
+        console.warn(`Failed to fetch sessions for user ${u.uid}:`, err.message)
+      }
+    }))
+    
+    // 3. Sort by timestamp descending
+    allEntries.sort((a, b) => {
+      const getMs = (t) => {
+          if (!t) return 0
+          if (t.seconds !== undefined) return t.seconds * 1000
+          if (t instanceof Date) return t.getTime()
+          const d = new Date(t)
+          return isNaN(d.getTime()) ? 0 : d.getTime()
+      }
+      return getMs(b.timestamp) - getMs(a.timestamp)
+    })
+    
+    return c.json(allEntries.slice(0, 100))
+  } catch (err) {
+    console.error('[admin/activity]', err.message)
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ── DELETE /api/admin/activity/:uid/:sid/:type ───────────────────────────────
+router.delete('/activity/:uid/:sid/:type', async (c) => {
+  try {
+    const { uid, sid, type } = c.req.param()
+    const admin = getAdmin(c.env)
+    const db = admin.firestore()
+    
+    // Pattern for sub-collection deletion: users/{uid}/sessions/{sid}
+    // We also try older patterns just in case
+    const paths = [
+      `users/${uid}/sessions/${sid}`,
+      `users/${uid}/sessions/${sid}-${type}`,
+      `activityLogs/${sid}`,
+      `activityLogs/${sid}-${type}`
+    ]
+    
+    await Promise.all(paths.map(async p => {
+      const parts = p.split('/')
+      if (parts.length === 3) {
+        await db.collection(parts[0]).doc(parts[1]).collection(parts[2]).doc(parts[3] || '').delete().catch(() => {})
+      } else {
+        await db.collection(parts[0]).doc(parts[1]).delete().catch(() => {})
+      }
+    }))
+
+    // Handled specific users/{uid}/sessions/{sid}
+    await db.collection('users').doc(uid).collection('sessions').doc(sid).delete().catch(() => {})
+    
+    return c.json({ success: true })
+  } catch (err) {
+    console.error('[admin/deleteActivity]', err.message)
     return c.json({ error: err.message }, 500)
   }
 })
