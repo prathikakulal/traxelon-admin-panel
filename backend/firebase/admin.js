@@ -39,7 +39,16 @@ async function signJWT(serviceAccount) {
     return `${message}.${signatureBase64}`;
 }
 
+let accessTokenCache = {
+    token: null,
+    expiry: 0
+};
+
 async function getAccessToken(env) {
+    if (accessTokenCache.token && Date.now() < accessTokenCache.expiry) {
+        return accessTokenCache.token;
+    }
+
     const b64 = env.FIREBASE_SERVICE_ACCOUNT_B64 || process.env.FIREBASE_SERVICE_ACCOUNT_B64;
     if (!b64) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_B64');
     const serviceAccount = JSON.parse(atob(b64));
@@ -50,6 +59,12 @@ async function getAccessToken(env) {
         body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
     });
     const data = await resp.json();
+    if (data.error) throw new Error(`Token Error: ${data.error_description || data.error}`);
+    
+    accessTokenCache = {
+        token: data.access_token,
+        expiry: Date.now() + (parseInt(data.expires_in || 3600, 10) - 60) * 1000
+    };
     return data.access_token;
 }
 
@@ -116,13 +131,57 @@ export function getAdmin(env) {
         return res;
     };
 
+    const toValue = (v) => {
+        if (v === null || v === undefined) return { nullValue: null }
+        if (typeof v === 'boolean') return { booleanValue: v }
+        if (typeof v === 'number') {
+            // Firestore REST API requires strings for integerValue
+            if (Number.isInteger(v)) return { integerValue: v.toString() }
+            return { doubleValue: v }
+        }
+        if (typeof v === 'string') return { stringValue: v }
+        if (Array.isArray(v)) return { arrayValue: { values: v.map(toValue) } }
+        if (typeof v === 'object') {
+            const fields = {}
+            for (const [k, val] of Object.entries(v)) {
+                fields[k] = toValue(val)
+            }
+            return { mapValue: { fields } }
+        }
+        return { stringValue: String(v) }
+    }
+
     return {
         firestore: () => ({
             collection: (col) => ({
                 doc: (id) => ({
                     get: async () => {
                         const d = await request(`${col}/${id}`);
+                        if (d.error) return { exists: false, data: () => ({}) };
                         return { exists: !!d.name, data: () => mapDoc(d) };
+                    },
+                    update: async (dataProps) => {
+                        const fields = {}
+                        const updateMask = []
+                        for (const [k, v] of Object.entries(dataProps)) {
+                            fields[k] = toValue(v)
+                            updateMask.push(`updateMask.fieldPaths=${k}`)
+                        }
+                        const query = updateMask.join('&')
+                        return request(`${col}/${id}?${query}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ fields })
+                        })
+                    },
+                    set: async (dataProps) => {
+                        const fields = {}
+                        for (const [k, v] of Object.entries(dataProps)) {
+                            fields[k] = toValue(v)
+                        }
+                        return request(`${col}/${id}`, {
+                            method: 'PATCH', 
+                            body: JSON.stringify({ fields })
+                        })
                     },
                     delete: () => request(`${col}/${id}`, { method: 'DELETE' }),
                     collection: (sub) => ({

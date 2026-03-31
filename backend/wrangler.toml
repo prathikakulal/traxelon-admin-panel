@@ -7,4 +7,4 @@ compatibility_flags = [ "nodejs_compat" ]
 minify = false
 
 [vars]
-# FIREBASE_PROJECT_ID = "traxelon-final"
+FIREBASE_PROJECT_ID = "traxelon-final"

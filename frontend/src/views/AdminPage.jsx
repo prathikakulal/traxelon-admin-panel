@@ -1,6 +1,6 @@
 // src/views/AdminPage.jsx
 //hello bendekai
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Link2, Shield, CheckCircle2,
@@ -10,6 +10,7 @@ import {
 import { db, auth } from '../firebase/config.js'
 import {
   doc, updateDoc, deleteDoc, increment,
+  onSnapshot, query, collection, orderBy
 } from 'firebase/firestore'
 import { signOut } from 'firebase/auth'
 
@@ -57,9 +58,36 @@ export default function AdminPage() {
   const [fetchError, setFetchError] = useState(null)
   const [loading, setLoading] = useState(false)
 
+  // ── Enriched Links (with creator info from local officers state) ──
+  const enrichedLinks = useMemo(() => {
+    console.log('[DEBUG] Re-calculating enriched links. Officers:', officers.length, 'Links:', links.length)
+    return links.map(l => {
+      // If doc already has it, keep it
+      if (l.creatorName && l.creatorEmail) return l
+      
+      const officer = officers.find(o => o.uid === l.uid)
+      if (officer) {
+        return {
+          ...l,
+          creatorName: officer.displayName || officer.email || l.uid,
+          creatorEmail: officer.email || ''
+        }
+      }
+      return l
+    })
+  }, [links, officers])
+
   useEffect(() => {
     const id = setInterval(() => setClock(new Date()), 1000)
     return () => clearInterval(id)
+  }, [])
+
+  // ── Inject global STYLES ──
+  useEffect(() => {
+    const el = document.createElement('style')
+    el.textContent = STYLES
+    document.head.appendChild(el)
+    return () => document.head.removeChild(el)
   }, [])
 
   // ── Fetch data from backend API (Admin SDK — bypasses Firestore rules) ──
@@ -67,16 +95,16 @@ export default function AdminPage() {
     if (!authed) return
     setLoading(true)
     try {
-      const [statsData, usersData, linksData] = await Promise.all([
+      const [statsData, usersData] = await Promise.all([
         fetchWithAuth('/api/admin/stats'),
         fetchWithAuth('/api/admin/users'),
-        fetchWithAuth('/api/admin/links'),
+        // fetchWithAuth('/api/admin/links'), // Switching to real-time
       ])
       setStats(statsData)
       setOfficers(usersData)
-      setLinks(linksData)
+      // setLinks(linksData)
       if (usersData?.length < 20) setHasMoreOfficers(false)
-      if (linksData?.length < 20) setHasMoreLinks(false)
+      // if (linksData?.length < 20) setHasMoreLinks(false)
       setFetchError(null)
     } catch (err) {
       console.error('Data fetch error:', err.message)
@@ -214,22 +242,59 @@ export default function AdminPage() {
     setLoadingMore(true)
     try {
       const cursor = links[links.length - 1].id
-      const more = await fetchWithAuth(`/api/admin/users?cursor=${cursor}`)
+      const more = await fetchWithAuth(`/api/admin/links?cursor=${cursor}`)
       if (more?.length > 0) setLinks(p => [...p, ...more])
       if (more?.length < 20) setHasMoreLinks(false)
     } catch (e) { showToast(e.message, false) }
     finally { setLoadingMore(false) }
   }
 
-  const pending = stats?.pending || 0
-
-  // ── Inject global styles ──
   useEffect(() => {
-    const el = document.createElement('style')
-    el.textContent = STYLES
-    document.head.appendChild(el)
-    return () => document.head.removeChild(el)
-  }, [])
+    if (!authed) return
+    console.log('[DEBUG] Setting up "trackingLinks" real-time listener')
+    setLoading(true)
+
+    const q = query(
+      collection(db, 'trackingLinks'),
+      orderBy('createdAt', 'desc')
+    )
+
+    const unsub = onSnapshot(q, (snap) => {
+      console.log('[DEBUG] Firestore Snapshot Received. Size:', snap.size)
+      const docs = snap.docs.map(d => {
+        const data = d.data()
+        return { 
+          id: d.id, 
+          ...data,
+          // Fallback token to ID if missing
+          token: data.token || d.id 
+        }
+      })
+      console.log('[DEBUG] Fetched links:', docs.slice(0, 3))
+      setLinks(docs)
+      setHasMoreLinks(false) // Assuming all are fetched in snapshot for simplicity, or we handle paging properly
+      setLoading(false)
+    }, (err) => {
+      console.error('[DEBUG] Real-time Error:', err.message)
+      setFetchError(err.message)
+      setLoading(false)
+    })
+
+    return () => unsub()
+  }, [authed])
+
+  const fetchCaptures = async (linkId) => {
+    try {
+      const data = await fetchWithAuth(`/api/admin/links/${linkId}/captures`)
+      if (data?.captures) {
+        setLinks(prev => prev.map(l => l.id === linkId ? { ...l, captures: data.captures, captureCount: data.captureCount } : l))
+      }
+    } catch (e) {
+      console.error('Failed to fetch captures:', e.message)
+    }
+  }
+
+  const pending = stats?.pending || 0
 
   if (!authed) {
     return (
@@ -245,8 +310,8 @@ export default function AdminPage() {
 
   const views = {
     overview: <OverviewView stats={stats} setTab={handleSetTab} />,
-    officers: <OfficersView officers={officers} links={links} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
-    links: <LinksView links={links} onLoadMore={loadMoreLinks} hasMore={hasMoreLinks} loadingMore={loadingMore} onOfficerClick={(uid) => { setHighlightUid(uid); setTab('officers') }} />,
+    officers: <OfficersView officers={officers} links={enrichedLinks} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
+    links: <LinksView links={enrichedLinks} onLoadMore={loadMoreLinks} hasMore={hasMoreLinks} loadingMore={loadingMore} onOfficerClick={(uid) => { setHighlightUid(uid); setTab('officers') }} onFetchCaptures={fetchCaptures} />,
     credits: <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
     coupons: <CouponsView showToast={showToast} />,
     activity: <ActivityView />,

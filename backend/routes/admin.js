@@ -33,6 +33,19 @@ router.get('/users', async (c) => {
 })
 
 // ── GET /api/admin/links ──────────────────────────────────────────────────────
+// Helper: normalise a single capture object coming from Firestore REST
+function normaliseCapture(cap) {
+  if (!cap || typeof cap !== 'object') return cap
+  // Normalise timestamp: prefer capturedAt, fall back to time (ms epoch)
+  let capturedAt = cap.capturedAt
+  if (!capturedAt && cap.time) {
+    // time may be stored as ms integer — convert to ISO string
+    const ms = typeof cap.time === 'number' ? cap.time : parseInt(cap.time, 10)
+    if (!isNaN(ms)) capturedAt = new Date(ms).toISOString()
+  }
+  return { ...cap, capturedAt }
+}
+
 router.get('/links', async (c) => {
   try {
     const admin = getAdmin(c.env)
@@ -66,27 +79,83 @@ router.get('/links', async (c) => {
       const linkId = l.id
       const creatorInfo = (l.uid && userMap[l.uid]) ? userMap[l.uid] : {}
       
-      // Fetch captures sub-collection
-      let captures = []
-      try {
-        const capsSnap = await db.collection('trackingLinks').doc(linkId).collection('captures').get()
-        captures = capsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        captures.sort((a, b) => new Date(b.capturedAt || 0).getTime() - new Date(a.capturedAt || 0).getTime())
-      } catch (err) {
-        console.warn(`[admin/links] Failed to fetch captures for ${linkId}:`, err.message)
+      // 1. Prioritize array field 'captures' from document data
+      let captures = Array.isArray(l.captures) ? l.captures.map(normaliseCapture) : []
+      
+      // 2. Fallback: Fetch captures sub-collection if array is empty
+      if (captures.length === 0) {
+        try {
+          const capsSnap = await db.collection('trackingLinks').doc(linkId).collection('captures').get()
+          const subCaps = capsSnap.docs.map(d => normaliseCapture({ id: d.id, ...d.data() }))
+          captures = [...captures, ...subCaps]
+        } catch (err) {
+          console.warn(`[admin/links] Failed to fetch captures sub-collection for ${linkId}:`, err.message)
+        }
       }
+
+      captures.sort((a, b) => {
+        const dateA = new Date(a.capturedAt || 0).getTime()
+        const dateB = new Date(b.capturedAt || 0).getTime()
+        return dateB - dateA
+      })
+
+      const actualCount = Math.max(parseInt(l.captureCount, 10) || 0, captures.length)
 
       return {
         ...l,
-        token: l.token || linkId, // Fallback if token field missing
+        token: l.token || linkId,
         ...creatorInfo,
         captures,
+        captureCount: actualCount
       }
     }))
 
     return c.json(enriched)
   } catch (err) {
     console.error('[admin/links]', err.message)
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ── GET /api/admin/links/:id/captures  (on-demand per-link fetch) ─────────────
+router.get('/links/:id/captures', async (c) => {
+  try {
+    const linkId = c.req.param('id')
+    const admin = getAdmin(c.env)
+    const db = admin.firestore()
+
+    console.log(`[GET /captures] Fetching for ID: ${linkId}`)
+    const docSnap = await db.collection('trackingLinks').doc(linkId).get()
+    
+    if (!docSnap.exists) {
+      console.warn(`[GET /captures] Link not found in DB: ${linkId}`)
+      return c.json({ captures: [], captureCount: 0, error: 'Document not found' }, 404)
+    }
+
+    const docData = docSnap.data()
+
+    let captures = Array.isArray(docData.captures) ? docData.captures.map(normaliseCapture) : []
+
+    // Also merge any sub-collection captures
+    try {
+      const capsSnap = await db.collection('trackingLinks').doc(linkId).collection('captures').get()
+      const subCaps = capsSnap.docs.map(d => normaliseCapture({ id: d.id, ...d.data() }))
+      // Merge, avoiding duplicates by id
+      const existingIds = new Set(captures.map(c => c.id).filter(Boolean))
+      subCaps.forEach(sc => { if (!existingIds.has(sc.id)) captures.push(sc) })
+    } catch (err) {
+      console.warn(`[GET /captures] Error fetching sub-collection for ${linkId}:`, err.message)
+    }
+
+    captures.sort((a, b) => {
+      const dateA = new Date(a.capturedAt || 0).getTime()
+      const dateB = new Date(b.capturedAt || 0).getTime()
+      return dateB - dateA
+    })
+
+    return c.json({ captures, captureCount: captures.length })
+  } catch (err) {
+    console.error('[admin/links/:id/captures]', err.message)
     return c.json({ error: err.message }, 500)
   }
 })
@@ -128,7 +197,12 @@ router.get('/stats', async (c) => {
     const totalLinks = linksSnap.docs.length
     
     // Calculate total captures across all links
-    const totalCaptures = linksSnap.docs.reduce((acc, d) => acc + (parseInt(d.data().captureCount, 10) || 0), 0)
+    const totalCaptures = linksSnap.docs.reduce((acc, d) => {
+      const data = d.data()
+      const countFromField = parseInt(data.captureCount, 10) || 0
+      const countFromArray = Array.isArray(data.captures) ? data.captures.length : 0
+      return acc + Math.max(countFromField, countFromArray)
+    }, 0)
     
     const stats = { totalOfficers, approved, pending, totalCredits, totalLinks, totalCaptures }
     return c.json(stats)
