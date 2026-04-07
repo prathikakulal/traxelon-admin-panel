@@ -23,7 +23,7 @@ export default function ActivityView() {
     const fetchActivity = async () => {
       setLoading(true)
       try {
-        const data = await fetchWithAuth(`/api/admin/activity`)
+        const data = await fetchWithAuth(`/api/admin/activity?limit=20`)
         if (mounted) {
           setLogs(data)
           if (data.length < 20) setHasMore(false)
@@ -42,8 +42,11 @@ export default function ActivityView() {
     if (logs.length === 0 || loadingMore || !hasMore) return
     setLoadingMore(true)
     try {
-      const cursor = logs[logs.length - 1].cursor || logs[logs.length - 1].timestamp
-      const more = await fetchWithAuth(`/api/admin/activity?cursor=${cursor}`)
+      const lastLog = logs[logs.length - 1]
+      const ts = lastLog.timestamp
+      const cursor = (ts?.seconds !== undefined) ? new Date(ts.seconds * 1000).toISOString() : new Date(ts).toISOString()
+      
+      const more = await fetchWithAuth(`/api/admin/activity?cursor=${cursor}&limit=20`)
       if (more.length > 0) {
         setLogs(prev => [...prev, ...more])
       }

@@ -10,7 +10,7 @@ import {
 import { db, auth } from '../firebase/config.js'
 import {
   doc, updateDoc, deleteDoc, increment,
-  onSnapshot, query, collection, orderBy
+  onSnapshot, query, collection, orderBy, limit
 } from 'firebase/firestore'
 import { signOut } from 'firebase/auth'
 
@@ -95,16 +95,17 @@ export default function AdminPage() {
     if (!authed) return
     setLoading(true)
     try {
-      const [statsData, usersData] = await Promise.all([
+      const [statsData, usersData, linksData] = await Promise.all([
         fetchWithAuth('/api/admin/stats'),
-        fetchWithAuth('/api/admin/users'),
-        // fetchWithAuth('/api/admin/links'), // Switching to real-time
+        fetchWithAuth('/api/admin/users?limit=20&offset=0'),
+        fetchWithAuth('/api/admin/links?limit=20&offset=0'),
       ])
       setStats(statsData)
       setOfficers(usersData)
-      // setLinks(linksData)
-      if (usersData?.length < 20) setHasMoreOfficers(false)
-      // if (linksData?.length < 20) setHasMoreLinks(false)
+      setLinks(linksData)
+      
+      setHasMoreOfficers(usersData?.length === 20)
+      setHasMoreLinks(linksData?.length === 20)
       setFetchError(null)
     } catch (err) {
       console.error('Data fetch error:', err.message)
@@ -229,10 +230,16 @@ export default function AdminPage() {
     if (officers.length === 0 || loadingMore || !hasMoreOfficers) return
     setLoadingMore(true)
     try {
-      const cursor = officers[officers.length - 1].uid
-      const more = await fetchWithAuth(`/api/admin/users?cursor=${cursor}`)
-      if (more?.length > 0) setOfficers(p => [...p, ...more])
-      if (more?.length < 20) setHasMoreOfficers(false)
+      const offset = officers.length
+      const more = await fetchWithAuth(`/api/admin/users?offset=${offset}&limit=20`)
+      if (more?.length > 0) {
+        setOfficers(p => {
+          const ids = new Set(p.map(x => x.uid))
+          const filtered = more.filter(m => !ids.has(m.uid))
+          return [...p, ...filtered]
+        })
+      }
+      setHasMoreOfficers(more?.length === 20)
     } catch (e) { showToast(e.message, false) }
     finally { setLoadingMore(false) }
   }
@@ -241,22 +248,30 @@ export default function AdminPage() {
     if (links.length === 0 || loadingMore || !hasMoreLinks) return
     setLoadingMore(true)
     try {
-      const cursor = links[links.length - 1].id
-      const more = await fetchWithAuth(`/api/admin/links?cursor=${cursor}`)
-      if (more?.length > 0) setLinks(p => [...p, ...more])
-      if (more?.length < 20) setHasMoreLinks(false)
+      const offset = links.length
+      const more = await fetchWithAuth(`/api/admin/links?offset=${offset}&limit=20`)
+      if (more?.length > 0) {
+        setLinks(p => {
+          const ids = new Set(p.map(x => x.id))
+          const filtered = (more.captures ? more.captures : more).filter(m => !ids.has(m.id))
+          return [...p, ...filtered]
+        })
+      }
+      setHasMoreLinks(more?.length === 20)
     } catch (e) { showToast(e.message, false) }
     finally { setLoadingMore(false) }
   }
 
   useEffect(() => {
     if (!authed) return
-    console.log('[DEBUG] Setting up "trackingLinks" real-time listener')
-    setLoading(true)
-
+    console.log('[DEBUG] Setting up "trackingLinks" real-time listener (limited to first 20)')
+    // No setloading(true) here because it might flicker, fetchData already handled it
+    
+    // We only listen to the first 20 to keep it paginated and performant
     const q = query(
       collection(db, 'trackingLinks'),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(20)
     )
 
     const unsub = onSnapshot(q, (snap) => {
@@ -266,18 +281,20 @@ export default function AdminPage() {
         return { 
           id: d.id, 
           ...data,
-          // Fallback token to ID if missing
           token: data.token || d.id 
         }
       })
-      console.log('[DEBUG] Fetched links:', docs.slice(0, 3))
-      setLinks(docs)
-      setHasMoreLinks(false) // Assuming all are fetched in snapshot for simplicity, or we handle paging properly
-      setLoading(false)
+      
+      setLinks(prev => {
+        // Only update the first 20 by merging with the rest of the existing list (older pages)
+        const rest = prev.length > 20 ? prev.slice(20) : []
+        const ids = new Set(docs.map(d => d.id))
+        const filteredRest = rest.filter(r => !ids.has(r.id))
+        return [...docs, ...filteredRest]
+      })
     }, (err) => {
       console.error('[DEBUG] Real-time Error:', err.message)
       setFetchError(err.message)
-      setLoading(false)
     })
 
     return () => unsub()

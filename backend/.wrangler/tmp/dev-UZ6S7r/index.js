@@ -3304,12 +3304,14 @@ router.get("/status", (c) => {
 });
 router.get("/users", async (c) => {
   try {
+    const limitArg = parseInt(c.req.query("limit")) || 20;
+    const offsetArg = parseInt(c.req.query("offset")) || 0;
     const admin = getAdmin(c.env);
     const db = admin.firestore();
     const snap = await db.collection("users").get();
     const data = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
     data.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    return c.json(data.slice(0, 50));
+    return c.json(data.slice(offsetArg, offsetArg + limitArg));
   } catch (err) {
     console.error("[admin/users]", err.message);
     return c.json({ error: err.message }, 500);
@@ -3327,12 +3329,14 @@ function normaliseCapture(cap) {
 __name(normaliseCapture, "normaliseCapture");
 router.get("/links", async (c) => {
   try {
+    const limitArg = parseInt(c.req.query("limit")) || 20;
+    const offsetArg = parseInt(c.req.query("offset")) || 0;
     const admin = getAdmin(c.env);
     const db = admin.firestore();
     const snap = await db.collection("trackingLinks").get();
     const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     data.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    const paged = data.slice(0, 50);
+    const paged = data.slice(offsetArg, offsetArg + limitArg);
     const uids = [...new Set(paged.map((l) => l.uid).filter(Boolean))];
     const userMap = {};
     if (uids.length > 0) {
@@ -3411,7 +3415,7 @@ router.get("/links/:id/captures", async (c) => {
       const dateB = new Date(b.capturedAt || 0).getTime();
       return dateB - dateA;
     });
-    return c.json({ captures, captureCount: captures.length });
+    return c.json({ captures: captures.slice(0, 20), captureCount: captures.length });
   } catch (err) {
     console.error("[admin/links/:id/captures]", err.message);
     return c.json({ error: err.message }, 500);
@@ -3456,6 +3460,8 @@ router.get("/stats", async (c) => {
 });
 router.get("/activity", async (c) => {
   try {
+    const limitArg = parseInt(c.req.query("limit")) || 20;
+    const cursor = c.req.query("cursor");
     const admin = getAdmin(c.env);
     const db = admin.firestore();
     const usersSnap = await db.collection("users").get();
@@ -3492,17 +3498,20 @@ router.get("/activity", async (c) => {
         console.warn(`Failed to fetch sessions for user ${u.uid}:`, err.message);
       }
     }));
-    allEntries.sort((a, b) => {
-      const getMs = /* @__PURE__ */ __name((t) => {
-        if (!t) return 0;
-        if (t.seconds !== void 0) return t.seconds * 1e3;
-        if (t instanceof Date) return t.getTime();
-        const d = new Date(t);
-        return isNaN(d.getTime()) ? 0 : d.getTime();
-      }, "getMs");
-      return getMs(b.timestamp) - getMs(a.timestamp);
-    });
-    return c.json(allEntries.slice(0, 100));
+    const getMs = /* @__PURE__ */ __name((t) => {
+      if (!t) return 0;
+      if (t.seconds !== void 0) return t.seconds * 1e3;
+      if (t instanceof Date) return t.getTime();
+      const d = new Date(t);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    }, "getMs");
+    allEntries.sort((a, b) => getMs(b.timestamp) - getMs(a.timestamp));
+    let paginated = allEntries;
+    if (cursor) {
+      const cursorMs = getMs(cursor);
+      paginated = allEntries.filter((e) => getMs(e.timestamp) < cursorMs);
+    }
+    return c.json(paginated.slice(0, limitArg));
   } catch (err) {
     console.error("[admin/activity]", err.message);
     return c.json({ error: err.message }, 500);
@@ -3848,7 +3857,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env2, _ctx, middlewareCtx
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-WTdJ28/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-fODnaS/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -3880,7 +3889,7 @@ function __facade_invoke__(request, env2, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-WTdJ28/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-fODnaS/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

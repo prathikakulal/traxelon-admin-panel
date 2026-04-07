@@ -14,7 +14,7 @@ export default function CouponsView({ showToast }) {
   const [maxUses, setMaxUses] = useState('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied]   = useState(null)
-  const [limitCount, setLimitCount] = useState(10)
+  const [limitCount, setLimitCount] = useState(20)
 
   useEffect(() => {
     const unsub = onSnapshot(

@@ -10,7 +10,7 @@ export default function PaymentsView({ showToast, officers }) {
   const [payments, setPayments] = useState([])
   const [q, setQ]               = useState('')
   const [form, setForm]         = useState({ officerEmail: '', amount: '', credits: '', note: '', txId: '' })
-  const [limitCount, setLimitCount] = useState(10)
+  const [limitCount, setLimitCount] = useState(20)
 
   useEffect(() => {
     const u1 = onSnapshot(

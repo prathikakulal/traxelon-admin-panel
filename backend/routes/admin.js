@@ -16,16 +16,18 @@ router.get('/status', (c) => {
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
 router.get('/users', async (c) => {
   try {
+    const limitArg = parseInt(c.req.query('limit')) || 20
+    const offsetArg = parseInt(c.req.query('offset')) || 0
+
     const admin = getAdmin(c.env)
     const db = admin.firestore()
     
-    // Simplification: Fetch all for agora, slice for paging.
-    // Real REST pagination uses StructuredQuery but this is faster for small collections.
+    // Simplification: Fetch all since it's a small collection, slice for paging.
     const snap = await db.collection('users').get()
     const data = snap.docs.map(d => ({ uid: d.id, ...d.data() }))
     
     data.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-    return c.json(data.slice(0, 50)) 
+    return c.json(data.slice(offsetArg, offsetArg + limitArg)) 
   } catch (err) {
     console.error('[admin/users]', err.message)
     return c.json({ error: err.message }, 500)
@@ -48,6 +50,9 @@ function normaliseCapture(cap) {
 
 router.get('/links', async (c) => {
   try {
+    const limitArg = parseInt(c.req.query('limit')) || 20
+    const offsetArg = parseInt(c.req.query('offset')) || 0
+
     const admin = getAdmin(c.env)
     const db = admin.firestore()
     
@@ -55,7 +60,7 @@ router.get('/links', async (c) => {
     const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     
     data.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-    const paged = data.slice(0, 50)
+    const paged = data.slice(offsetArg, offsetArg + limitArg)
 
     // Enrich with creator info
     const uids = [...new Set(paged.map(l => l.uid).filter(Boolean))]
@@ -153,7 +158,7 @@ router.get('/links/:id/captures', async (c) => {
       return dateB - dateA
     })
 
-    return c.json({ captures, captureCount: captures.length })
+    return c.json({ captures: captures.slice(0, 20), captureCount: captures.length })
   } catch (err) {
     console.error('[admin/links/:id/captures]', err.message)
     return c.json({ error: err.message }, 500)
@@ -215,6 +220,9 @@ router.get('/stats', async (c) => {
 // ── GET /api/admin/activity ──────────────────────────────────────────────────
 router.get('/activity', async (c) => {
   try {
+    const limitArg = parseInt(c.req.query('limit')) || 20
+    const cursor = c.req.query('cursor') // expects ISO string or date
+
     const admin = getAdmin(c.env)
     const db = admin.firestore()
     
@@ -237,10 +245,6 @@ router.get('/activity', async (c) => {
               device: s.device || ''
             }
 
-            // A session might be a single "log" entry with a type,
-            // or a session document that we need to split into login/logout events.
-            // Based on DB observation, type is often "login" but document contains logoutAt.
-            
             // 1. Create Login Entry
             allEntries.push({ 
                 ...base, 
@@ -265,18 +269,24 @@ router.get('/activity', async (c) => {
     }))
     
     // 3. Sort by timestamp descending
-    allEntries.sort((a, b) => {
-      const getMs = (t) => {
-          if (!t) return 0
-          if (t.seconds !== undefined) return t.seconds * 1000
-          if (t instanceof Date) return t.getTime()
-          const d = new Date(t)
-          return isNaN(d.getTime()) ? 0 : d.getTime()
-      }
-      return getMs(b.timestamp) - getMs(a.timestamp)
-    })
+    const getMs = (t) => {
+        if (!t) return 0
+        if (t.seconds !== undefined) return t.seconds * 1000
+        if (t instanceof Date) return t.getTime()
+        const d = new Date(t)
+        return isNaN(d.getTime()) ? 0 : d.getTime()
+    }
+
+    allEntries.sort((a, b) => getMs(b.timestamp) - getMs(a.timestamp))
+
+    // 4. Cursor Filtering (find records earlier than cursor)
+    let paginated = allEntries
+    if (cursor) {
+        const cursorMs = getMs(cursor)
+        paginated = allEntries.filter(e => getMs(e.timestamp) < cursorMs)
+    }
     
-    return c.json(allEntries.slice(0, 100))
+    return c.json(paginated.slice(0, limitArg))
   } catch (err) {
     console.error('[admin/activity]', err.message)
     return c.json({ error: err.message }, 500)
