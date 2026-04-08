@@ -15,6 +15,7 @@ yarn-debug.log*
 yarn-debug.log*
 
 # Build output
+dist/
 frontend/dist/
 frontend/dist-ssr/
 
