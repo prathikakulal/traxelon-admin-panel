@@ -193,6 +193,13 @@ export default function AdminPage() {
     if (!amount || amount < 1) return
     try {
       await updateDoc(doc(db, 'users', uid), { credits: increment(amount) })
+      
+      // Sync global stats
+      try {
+        const statsRef = doc(db, 'metadata', 'dashboardStats')
+        await updateDoc(statsRef, { totalCredits: increment(amount) })
+      } catch (err) { console.warn('Stats sync failed:', err.message) }
+
       setOfficers(prev => prev.map(x => x.uid === uid ? { ...x, credits: (x.credits || 0) + amount } : x))
       showToast(`+${amount} credit${amount > 1 ? 's' : ''} added`)
     } catch (e) { showToast(e.message, false) }
@@ -203,6 +210,13 @@ export default function AdminPage() {
     if ((o?.credits || 0) < amount) { showToast('Not enough credits to deduct', false); return }
     try {
       await updateDoc(doc(db, 'users', uid), { credits: increment(-amount) })
+      
+      // Sync global stats
+      try {
+        const statsRef = doc(db, 'metadata', 'dashboardStats')
+        await updateDoc(statsRef, { totalCredits: increment(-amount) })
+      } catch (err) { console.warn('Stats sync failed:', err.message) }
+
       setOfficers(prev => prev.map(x => x.uid === uid ? { ...x, credits: Math.max(0, (x.credits || 0) - amount) } : x))
       showToast(`−${amount} credit${amount > 1 ? 's' : ''} deducted`)
     } catch (e) { showToast(e.message, false) }
@@ -300,6 +314,37 @@ export default function AdminPage() {
     return () => unsub()
   }, [authed])
 
+  // Real-time listener for users (officers)
+  useEffect(() => {
+    if (!authed) return
+    const q = query(
+      collection(db, 'users'),
+      orderBy('createdAt', 'desc'),
+      limit(20)
+    )
+    const unsub = onSnapshot(q, (snap) => {
+      const docs = snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+      setOfficers(prev => {
+        const rest = prev.length > 20 ? prev.slice(20) : []
+        const ids = new Set(docs.map(d => d.uid))
+        const filteredRest = rest.filter(r => !ids.has(r.uid))
+        return [...docs, ...filteredRest]
+      })
+    }, (err) => {
+      console.error('[DEBUG] Users Real-time Error:', err.message)
+    })
+    return () => unsub()
+  }, [authed])
+
+  // Real-time listener for dashboard stats
+  useEffect(() => {
+    if (!authed) return
+    const unsub = onSnapshot(doc(db, 'metadata', 'dashboardStats'), (snap) => {
+      if (snap.exists()) setStats(snap.data())
+    })
+    return () => unsub()
+  }, [authed])
+
   const fetchCaptures = async (linkId) => {
     try {
       const data = await fetchWithAuth(`/api/admin/links/${linkId}/captures`)
@@ -332,7 +377,7 @@ export default function AdminPage() {
     credits: <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
     coupons: <CouponsView showToast={showToast} />,
     activity: <ActivityView />,
-    payments: <PaymentsView showToast={showToast} officers={officers} />,
+    payments: <PaymentsView showToast={showToast} officers={officers} onAddCredit={handleAddCredit} />,
   }
 
   return (

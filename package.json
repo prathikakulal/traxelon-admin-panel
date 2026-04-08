@@ -1,0 +1,14 @@
+{
+  "name": "traxelon-admin-panel-root",
+  "version": "1.0.0",
+  "description": "Root management for Traxelon Admin Panel",
+  "scripts": {
+    "build": "npm run build --prefix frontend",
+    "deploy:backend": "npm run deploy --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

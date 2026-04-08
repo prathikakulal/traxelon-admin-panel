@@ -6,7 +6,7 @@ import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, addD
 import { StatCard, SBadge, fmt } from '../components/UI.jsx'
 import { P } from '../styles/theme.js'
 
-export default function PaymentsView({ showToast, officers }) {
+export default function PaymentsView({ showToast, officers, onAddCredit }) {
   const [payments, setPayments] = useState([])
   const [q, setQ]               = useState('')
   const [form, setForm]         = useState({ officerEmail: '', amount: '', credits: '', note: '', txId: '' })
@@ -25,15 +25,30 @@ export default function PaymentsView({ showToast, officers }) {
     if (!form.officerEmail || !form.amount || !form.credits) { showToast('Fill in officer email, amount and credits', false); return }
     try {
       const officer = officers.find(o => o.email === form.officerEmail)
+      const creditAmt = parseInt(form.credits)
+      
       await addDoc(collection(db, 'payments'), {
-        officerEmail: form.officerEmail, officerName: officer?.displayName || 'Unknown',
-        officerUid: officer?.uid || null, amount: parseFloat(form.amount),
-        credits: parseInt(form.credits), txId: form.txId || 'MANUAL',
-        note: form.note || '', status: 'paid', paidAt: serverTimestamp(),
+        officerEmail: form.officerEmail, 
+        officerName: officer?.displayName || 'Unknown',
+        officerUid: officer?.uid || null, 
+        amount: parseFloat(form.amount),
+        credits: creditAmt, 
+        txId: form.txId || 'MANUAL',
+        note: form.note || '', 
+        status: 'paid', 
+        paidAt: serverTimestamp(),
       })
+
       if (officer?.uid) {
-        await updateDoc(doc(db, 'users', officer.uid), { credits: increment(parseInt(form.credits)) })
+        // Use the shared function from AdminPage to ensure local state & stats stay in sync
+        if (typeof onAddCredit === 'function') {
+          await onAddCredit(officer.uid, creditAmt)
+        } else {
+          // Fallback if prop missing
+          await updateDoc(doc(db, 'users', officer.uid), { credits: increment(creditAmt) })
+        }
       }
+      
       setForm({ officerEmail: '', amount: '', credits: '', note: '', txId: '' })
       showToast('Payment recorded & credits added ✓')
     } catch (e) { showToast(e.message, false) }
