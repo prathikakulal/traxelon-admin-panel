@@ -3231,6 +3231,23 @@ function getAdmin(env2) {
           headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ localId: uid })
         });
+      },
+      updateUser: async (uid, data) => {
+        const token = await getAccessToken(env2);
+        const body = { localId: uid };
+        if (data.displayName)
+          body.displayName = data.displayName;
+        if (data.email)
+          body.email = data.email;
+        const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:update`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const resData = await resp.json();
+        if (resData.error)
+          throw new Error(resData.error.message);
+        return resData;
       }
     }),
     FieldValue: { increment: (n) => ({ integerValue: n }), delete: () => null }
@@ -3381,6 +3398,29 @@ router.delete("/users/:uid", async (c) => {
     return c.json({ error: err.message }, 500);
   }
 });
+router.patch("/users/:uid", async (c) => {
+  try {
+    const uid = c.req.param("uid");
+    const body = await c.req.json();
+    const { displayName, email } = body;
+    const admin = getAdmin(c.env);
+    const db = admin.firestore();
+    const updateData = {};
+    if (displayName !== void 0)
+      updateData.displayName = displayName;
+    if (email !== void 0)
+      updateData.email = email;
+    if (Object.keys(updateData).length === 0) {
+      return c.json({ error: "No fields to update" }, 400);
+    }
+    await admin.auth().updateUser(uid, updateData);
+    await db.collection("users").doc(uid).update(updateData);
+    return c.json({ success: true, message: "Officer updated successfully" });
+  } catch (err) {
+    console.error("[admin/updateUser]", err.message);
+    return c.json({ error: err.message }, 500);
+  }
+});
 router.get("/stats", async (c) => {
   try {
     const admin = getAdmin(c.env);
@@ -3504,7 +3544,7 @@ var app = new Hono2();
 app.use("*", cors({
   origin: "*",
   // Adjust to your frontend domain in production
-  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization"],
   exposeHeaders: ["Content-Length"],
   maxAge: 600
