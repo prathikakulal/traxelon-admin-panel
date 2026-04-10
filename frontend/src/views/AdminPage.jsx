@@ -226,13 +226,25 @@ export default function AdminPage() {
     if (!window.confirm('Permanently delete this officer? This will also remove their login credentials and activity logs.')) return
     try { 
       await fetchWithAuth(`/api/admin/users/${uid}`, { method: 'DELETE' })
-      
-      // Update local state without refresh
       setOfficers(prev => prev.filter(x => x.uid !== uid))
-      
       showToast('Officer and credentials permanently deleted') 
     }
     catch (e) { showToast(e.message, false) }
+  }
+
+  const handleUpdateOfficer = async (uid, data) => {
+    try {
+      await fetchWithAuth(`/api/admin/users/${uid}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      })
+      
+      // Update local state
+      setOfficers(prev => prev.map(o => o.uid === uid ? { ...o, ...data } : o))
+      showToast('Officer details updated')
+    } catch (e) {
+      showToast(e.message, false)
+    }
   }
 
   const handleLogout = async () => {
@@ -372,7 +384,7 @@ export default function AdminPage() {
 
   const views = {
     overview: <OverviewView stats={stats} setTab={handleSetTab} />,
-    officers: <OfficersView officers={officers} links={enrichedLinks} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
+    officers: <OfficersView officers={officers} links={enrichedLinks} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onUpdateOfficer={handleUpdateOfficer} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
     links: <LinksView links={enrichedLinks} onLoadMore={loadMoreLinks} hasMore={hasMoreLinks} loadingMore={loadingMore} onOfficerClick={(uid) => { setHighlightUid(uid); setTab('officers') }} onFetchCaptures={fetchCaptures} />,
     credits: <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
     coupons: <CouponsView showToast={showToast} />,

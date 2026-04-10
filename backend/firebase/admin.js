@@ -206,6 +206,21 @@ export function getAdmin(env) {
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ localId: uid })
                 });
+            },
+            updateUser: async (uid, data) => {
+                const token = await getAccessToken(env);
+                const body = { localId: uid }
+                if (data.displayName) body.displayName = data.displayName
+                if (data.email) body.email = data.email
+                
+                const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:update`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const resData = await resp.json();
+                if (resData.error) throw new Error(resData.error.message);
+                return resData;
             }
         }),
         FieldValue: { increment: (n) => ({ integerValue: n }), delete: () => null }
