@@ -835,7 +835,15 @@ export default function AdminPage() {
   }
 
   const views = {
-    overview: <OverviewView stats={stats} setTab={handleSetTab} />,
+    overview: <OverviewView
+  stats={{
+    ...stats,
+    totalCredits: officers.reduce((sum, o) => sum + (o.credits || 0), 0),
+    totalLinks: links.length,
+    totalCaptures: links.reduce((sum, l) => sum + (l.captureCount || l.captures?.length || 0), 0),
+  }}
+  setTab={handleSetTab}
+/>,
     officers: <OfficersView officers={officers} links={enrichedLinks} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
     links: <LinksView links={enrichedLinks} onLoadMore={loadMoreLinks} hasMore={hasMoreLinks} loadingMore={loadingMore} onOfficerClick={(uid) => { setHighlightUid(uid); setTab('officers') }} onFetchCaptures={fetchCaptures} />,
     credits: <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
