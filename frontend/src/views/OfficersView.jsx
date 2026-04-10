@@ -1121,7 +1121,7 @@
 
 // src/views/OfficersView.jsx
 import { useState, useEffect, useRef } from 'react'
-import { Search, CheckCircle2, XCircle, Plus, Minus, Trash2, FileText, Users } from 'lucide-react'
+import { Search, CheckCircle2, XCircle, Plus, Minus, Trash2, FileText, Users, Edit } from 'lucide-react'
 import { SBadge } from '../components/UI.jsx'
 import { P } from '../styles/theme.js'
 
@@ -1568,11 +1568,16 @@ function generatePDF(officers, links) {
   // =============================================================================
   // COMPONENT
   // =============================================================================
-  export default function OfficersView({ officers, links, onApprove, onReject, onAddCredit, onDeductCredit, onDelete, onLoadMore, hasMore, loadingMore, highlightUid }) {
+  export default function OfficersView({ officers, links, onApprove, onReject, onAddCredit, onDeductCredit, onUpdateOfficer, onDelete, onLoadMore, hasMore, loadingMore, highlightUid }) {
     const [q, setQ] = useState('')
     const [amt, setAmt] = useState({})
     const [selected, setSelected] = useState(new Set())
     const highlightRef = useRef(null)
+
+    const [editOfficer, setEditOfficer] = useState(null)
+    const [editName, setEditName] = useState('')
+    const [editEmail, setEditEmail] = useState('')
+    const [isSaving, setIsSaving] = useState(false)
 
     useEffect(() => {
       if (highlightUid && highlightRef.current) {
@@ -1720,6 +1725,11 @@ function generatePDF(officers, links) {
                         {o.status === 'rejected' && (
                           <button className="abtn abtn-p" style={{ padding: '5px 10px', fontSize: 11 }} onClick={() => onApprove(o.uid)}><CheckCircle2 size={11} /> Re-approve</button>
                         )}
+                        <button className="aib" style={{ color: P.cyan }} title="Edit Name/Email" onClick={() => { 
+                          setEditOfficer(o)
+                          setEditName(o.displayName || '')
+                          setEditEmail(o.email || '')
+                        }}><Edit size={12} /></button>
                         <button className="aib" style={{ color: P.red }} onClick={() => onDelete(o.uid)}><Trash2 size={12} /></button>
                       </div>
                     </td>
@@ -1732,6 +1742,38 @@ function generatePDF(officers, links) {
             </tbody>
           </table>
         </div>
+
+        {editOfficer && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: 20 }}>
+            <div className="atc" style={{ width: '100%', maxWidth: 400, padding: 24, border: `1px solid ${P.border}` }}>
+              <h3 style={{ fontFamily: "'Bebas Neue',cursive", fontSize: 22, color: P.txt, margin: '0 0 20px', letterSpacing: 1 }}>Edit Officer Details</h3>
+              
+              <div style={{ marginBottom: 15 }}>
+                <label style={{ display: 'block', fontSize: 10, color: P.muted, textTransform: 'uppercase', marginBottom: 5 }}>Full Name</label>
+                <input className="ati" style={{ width: '100%' }} value={editName} onChange={e => setEditName(e.target.value)} placeholder="Name" />
+              </div>
+
+              <div style={{ marginBottom: 25 }}>
+                <label style={{ display: 'block', fontSize: 10, color: P.muted, textTransform: 'uppercase', marginBottom: 5 }}>Email Address</label>
+                <input className="ati" style={{ width: '100%' }} value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="Email" />
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="abtn abtn-g" style={{ flex: 1 }} disabled={isSaving} onClick={async () => {
+                  setIsSaving(true)
+                  try {
+                    await onUpdateOfficer(editOfficer.uid, { displayName: editName, email: editEmail })
+                    setEditOfficer(null)
+                  } catch(e) {}
+                  setIsSaving(false)
+                }}>
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button className="abtn" style={{ flex: 1, background: 'transparent', border: `1px solid ${P.border}` }} onClick={() => setEditOfficer(null)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {!q && hasMore && (
           <div style={{ padding: '14px', textAlign: 'center', borderTop: `1px solid ${P.border}` }}>

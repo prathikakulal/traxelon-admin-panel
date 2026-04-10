@@ -184,6 +184,37 @@ router.delete('/users/:uid', async (c) => {
   }
 })
 
+// ── PATCH /api/admin/users/:uid ──────────────────────────────────────────────
+router.patch('/users/:uid', async (c) => {
+  try {
+    const uid = c.req.param('uid')
+    const body = await c.req.json()
+    const { displayName, email } = body
+    
+    const admin = getAdmin(c.env)
+    const db = admin.firestore()
+
+    const updateData = {}
+    if (displayName !== undefined) updateData.displayName = displayName
+    if (email !== undefined) updateData.email = email
+
+    if (Object.keys(updateData).length === 0) {
+      return c.json({ error: 'No fields to update' }, 400)
+    }
+
+    // 1. Update Firebase Auth
+    await admin.auth().updateUser(uid, updateData)
+
+    // 2. Update Firestore
+    await db.collection('users').doc(uid).update(updateData)
+    
+    return c.json({ success: true, message: 'Officer updated successfully' })
+  } catch (err) {
+    console.error('[admin/updateUser]', err.message)
+    return c.json({ error: err.message }, 500)
+  }
+})
+
 // ── GET /api/admin/stats ──────────────────────────────────────────────────────
 router.get('/stats', async (c) => {
   try {

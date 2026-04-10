@@ -9,7 +9,7 @@ const app = new Hono()
 // ── Global Middleware ────────────────────────────────────────────────────────
 app.use('*', cors({
   origin: '*', // Adjust to your frontend domain in production
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
   exposeHeaders: ['Content-Length'],
   maxAge: 600,
