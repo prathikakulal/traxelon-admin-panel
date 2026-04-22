@@ -6,7 +6,7 @@ var __publicField = (obj, key, value) => {
   return value;
 };
 
-// .wrangler/tmp/bundle-3Gc4Gd/strip-cf-connecting-ip-header.js
+// .wrangler/tmp/bundle-7q4UN2/strip-cf-connecting-ip-header.js
 function stripCfConnectingIPHeader(input, init) {
   const request = new Request(input, init);
   request.headers.delete("CF-Connecting-IP");
@@ -3356,10 +3356,8 @@ router.get("/links/:id/captures", async (c) => {
     const linkId = c.req.param("id");
     const admin = getAdmin(c.env);
     const db = admin.firestore();
-    console.log(`[GET /captures] Fetching for ID: ${linkId}`);
     const docSnap = await db.collection("trackingLinks").doc(linkId).get();
     if (!docSnap.exists) {
-      console.warn(`[GET /captures] Link not found in DB: ${linkId}`);
       return c.json({ captures: [], captureCount: 0, error: "Document not found" }, 404);
     }
     const docData = docSnap.data();
@@ -3534,6 +3532,73 @@ router.delete("/activity/:uid/:sid/:type", async (c) => {
     return c.json({ success: true });
   } catch (err) {
     console.error("[admin/deleteActivity]", err.message);
+    return c.json({ error: err.message }, 500);
+  }
+});
+function randomSegment(length = 6) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join("");
+}
+__name(randomSegment, "randomSegment");
+function buildVoucherCode(prefix, middleName, suffix) {
+  const rand = randomSegment(6);
+  return [prefix, middleName, rand, suffix].filter(Boolean).map((s) => s.toUpperCase()).join("-");
+}
+__name(buildVoucherCode, "buildVoucherCode");
+router.get("/vouchers", async (c) => {
+  try {
+    const admin = getAdmin(c.env);
+    const db = admin.firestore();
+    const snap = await db.collection("vouchers").get();
+    const vouchers = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return c.json({ success: true, vouchers });
+  } catch (err) {
+    console.error("[admin/vouchers GET]", err.message);
+    return c.json({ error: err.message }, 500);
+  }
+});
+router.post("/vouchers", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { prefix = "", middleName = "", suffix = "", startDate, endDate, credits } = body;
+    if (!startDate || !endDate)
+      return c.json({ error: "startDate and endDate are required." }, 400);
+    if (!credits || Number(credits) < 15)
+      return c.json({ error: "Minimum credit value is 15." }, 400);
+    if (new Date(endDate) <= new Date(startDate))
+      return c.json({ error: "endDate must be after startDate." }, 400);
+    const code = buildVoucherCode(prefix, middleName, suffix);
+    const admin = getAdmin(c.env);
+    const db = admin.firestore();
+    const docId = crypto.randomUUID();
+    await db.collection("vouchers").doc(docId).set({
+      code,
+      prefix,
+      middleName,
+      suffix,
+      startDate,
+      endDate,
+      credits: Number(credits),
+      redeemed: false,
+      redeemedBy: null,
+      redeemedAt: null,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    return c.json({ success: true, id: docId, code, credits: Number(credits) });
+  } catch (err) {
+    console.error("[admin/vouchers POST]", err.message);
+    return c.json({ error: err.message }, 500);
+  }
+});
+router.delete("/vouchers/:id", async (c) => {
+  try {
+    const { id } = c.req.param();
+    const admin = getAdmin(c.env);
+    const db = admin.firestore();
+    await db.collection("vouchers").doc(id).delete();
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("[admin/vouchers DELETE]", err.message);
     return c.json({ error: err.message }, 500);
   }
 });
@@ -3860,7 +3925,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env2, _ctx, middlewareCtx
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-3Gc4Gd/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-7q4UN2/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -3892,7 +3957,7 @@ function __facade_invoke__(request, env2, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-3Gc4Gd/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-7q4UN2/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
