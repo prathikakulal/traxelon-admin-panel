@@ -214,7 +214,7 @@ export default function CouponsView({ showToast }) {
   const handleDiscountChange = (e) => {
     const val = e.target.value
     if (val === '') { setDiscount(''); return }
-    const num = Math.min(98, Math.max(1, parseInt(val) || 1))
+    const num = Math.min(99, Math.max(1, parseInt(val) || 1))
     setDiscount(num)
   }
 
