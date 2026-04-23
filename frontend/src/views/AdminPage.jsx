@@ -1301,7 +1301,7 @@ export default function AdminPage() {
       }}
       setTab={handleSetTab}
     />,
-    officers: <OfficersView officers={officers} links={enrichedLinks} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
+    officers: <OfficersView officers={officers} links={enrichedLinks} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onUpdateOfficer={handleUpdateOfficer} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
     links:    <LinksView links={enrichedLinks} onLoadMore={loadMoreLinks} hasMore={hasMoreLinks} loadingMore={loadingMore} onOfficerClick={(uid) => { setHighlightUid(uid); setTab('officers') }} onFetchCaptures={fetchCaptures} />,
     credits:  <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
     coupons:  <CouponsView showToast={showToast} />,
