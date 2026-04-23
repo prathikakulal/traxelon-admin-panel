@@ -3563,8 +3563,8 @@ router.post("/vouchers", async (c) => {
     const { prefix = "", middleName = "", suffix = "", startDate, endDate, credits } = body;
     if (!startDate || !endDate)
       return c.json({ error: "startDate and endDate are required." }, 400);
-    if (!credits || Number(credits) < 15)
-      return c.json({ error: "Minimum credit value is 15." }, 400);
+    if (!credits || Number(credits) < 1)
+      return c.json({ error: "Minimum credit value is 1." }, 400);
     if (new Date(endDate) <= new Date(startDate))
       return c.json({ error: "endDate must be after startDate." }, 400);
     const code = buildVoucherCode(prefix, middleName, suffix);
