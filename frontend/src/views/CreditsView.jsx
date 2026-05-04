@@ -1,18 +1,176 @@
+// // src/views/CreditsView.jsx
+// import { useState } from 'react'
+// import { Search, Zap, Plus, Minus, Trash2 } from 'lucide-react'
+// import { P } from '../styles/theme.js'
+
+// export default function CreditsView({ officers, onAddCredit, onDeductCredit, onDelete }) {
+//   const [q, setQ]       = useState('')
+//   const [bulk, setBulk] = useState('')
+//   const [amt, setAmt]   = useState({})
+//   const [ded, setDed]   = useState({})
+
+//   const approved = officers.filter(o => o.status !== 'rejected' && !o.isAdmin).filter(o =>
+//     (o.displayName || '').toLowerCase().includes(q.toLowerCase()) ||
+//     (o.email || '').toLowerCase().includes(q.toLowerCase())
+//   )
+
+//   return (
+//     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+//       {/* Bulk grant */}
+//       <div className="atc" style={{ padding: 20 }}>
+//         <div style={{ fontFamily: "'Bebas Neue',cursive", fontSize: 20, color: P.txt, letterSpacing: 1, marginBottom: 12 }}>
+//           BULK GRANT <span style={{ color: P.cyan }}>CREDITS</span>
+//         </div>
+//         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+//           <input
+//             type="number" min="1"
+//             placeholder="Credits to add to ALL approved officers"
+//             value={bulk} onChange={e => setBulk(e.target.value)}
+//             className="ati" style={{ width: 300 }}
+//           />
+//           <button className="abtn abtn-p" onClick={() => {
+//             const n = parseInt(bulk)
+//             if (!n || n < 1) return
+//             approved.forEach(o => onAddCredit(o.uid, n))
+//             setBulk('')
+//           }}>
+//             <Zap size={14} /> Grant to All ({approved.length})
+//           </button>
+//         </div>
+//       </div>
+
+//       {/* Per-officer table */}
+//       <div className="atc" style={{ overflow: 'hidden' }}>
+//         <div style={{ padding: '14px 18px', borderBottom: `1px solid ${P.border}` }}>
+//           <div style={{ position: 'relative', maxWidth: 300 }}>
+//             <Search size={13} color={P.muted} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+//             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter officers…" className="ati" style={{ paddingLeft: 32, width: '100%' }} />
+//           </div>
+//         </div>
+//         <div style={{ overflowX: 'auto' }}>
+//           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+//             <thead>
+//               <tr style={{ borderBottom: `1px solid ${P.border}` }}>
+//                 {['Officer', 'Email', 'Credits', 'Add', 'Deduct', ''].map(h => (
+//                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, color: P.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+//                 ))}
+//               </tr>
+//             </thead>
+//             <tbody>
+//               {approved.map(o => (
+//                 <tr key={o.uid} className="atr" style={{ borderBottom: `1px solid ${P.border}18` }}>
+
+//                   {/* Officer name */}
+//                   <td style={{ padding: '12px 14px', fontSize: 13, color: P.txt }}>{o.displayName || '—'}</td>
+
+//                   {/* Email */}
+//                   <td style={{ padding: '12px 14px', fontSize: 11, color: P.muted, fontFamily: "'JetBrains Mono',monospace" }}>{o.email}</td>
+
+//                   {/* Current credits */}
+//                   <td style={{ padding: '12px 14px' }}>
+//                     <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 22, color: P.cyan, fontWeight: 700 }}>{o.credits ?? 0}</span>
+//                   </td>
+
+//                   {/* Add credits — input + button */}
+//                   <td style={{ padding: '12px 14px' }}>
+//                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+//                       <input
+//                         type="number" min="1" placeholder="Amt"
+//                         value={amt[o.uid] || ''}
+//                         onChange={e => setAmt(p => ({ ...p, [o.uid]: e.target.value }))}
+//                         className="ati" style={{ width: 72, padding: '5px 8px' }}
+//                       />
+//                       <button
+//                         className="abtn abtn-p"
+//                         style={{ padding: '5px 12px', fontSize: 12 }}
+//                         onClick={() => {
+//                           onAddCredit(o.uid, parseInt(amt[o.uid] || 1))
+//                           setAmt(p => ({ ...p, [o.uid]: '' }))
+//                         }}
+//                       >
+//                         <Plus size={12} /> Add
+//                       </button>
+//                     </div>
+//                   </td>
+
+//                   {/* Deduct credits — input + button, same style as Add */}
+//                   <td style={{ padding: '12px 14px' }}>
+//                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+//                       <input
+//                         type="number" min="1" placeholder="Amt"
+//                         value={ded[o.uid] || ''}
+//                         onChange={e => setDed(p => ({ ...p, [o.uid]: e.target.value }))}
+//                         className="ati" style={{ width: 72, padding: '5px 8px' }}
+//                       />
+//                       <button
+//                         className="abtn abtn-r"
+//                         style={{ padding: '5px 12px', fontSize: 12 }}
+//                         onClick={() => {
+//                           onDeductCredit(o.uid, parseInt(ded[o.uid] || 1))
+//                           setDed(p => ({ ...p, [o.uid]: '' }))
+//                         }}
+//                       >
+//                         <Minus size={12} /> Deduct
+//                       </button>
+//                     </div>
+//                   </td>
+
+//                   {/* Clear credits button */}
+//                   <td style={{ padding: '12px 14px' }}>
+//                     <button
+//                       className="abtn abtn-r"
+//                       style={{ padding: '5px 12px', fontSize: 12 }}
+//                       title="Clear all credits"
+//                       onClick={() => onDeductCredit(o.uid, o.credits ?? 0)}
+//                     >
+//                       Clear
+//                     </button>
+//                   </td>
+//                 </tr>
+//               ))}
+//               {approved.length === 0 && (
+//                 <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No approved officers yet</td></tr>
+//               )}
+//             </tbody>
+//           </table>
+//         </div>
+//       </div>
+//     </div>
+//   )
+// }
 // src/views/CreditsView.jsx
-import { useState } from 'react'
-import { Search, Zap, Plus, Minus, Trash2 } from 'lucide-react'
+// src/views/CreditsView.jsx
+import { useState, useMemo } from 'react'
+import { Search, Zap, Plus, Minus } from 'lucide-react'
 import { P } from '../styles/theme.js'
 
-export default function CreditsView({ officers, onAddCredit, onDeductCredit, onDelete }) {
-  const [q, setQ]       = useState('')
-  const [bulk, setBulk] = useState('')
-  const [amt, setAmt]   = useState({})
-  const [ded, setDed]   = useState({})
+const PAGE_SIZE = 10
 
-  const approved = officers.filter(o => o.status !== 'rejected' && !o.isAdmin).filter(o =>
-    (o.displayName || '').toLowerCase().includes(q.toLowerCase()) ||
-    (o.email || '').toLowerCase().includes(q.toLowerCase())
+export default function CreditsView({ officers, onAddCredit, onDeductCredit, onDelete }) {
+  const [q, setQ]         = useState('')
+  const [bulk, setBulk]   = useState('')
+  const [amt, setAmt]     = useState({})
+  const [ded, setDed]     = useState({})
+  const [visible, setVisible] = useState(PAGE_SIZE)
+
+  const approved = useMemo(() =>
+    officers
+      .filter(o => o.status !== 'rejected' && !o.isAdmin)
+      .filter(o =>
+        (o.displayName || '').toLowerCase().includes(q.toLowerCase()) ||
+        (o.email || '').toLowerCase().includes(q.toLowerCase())
+      ),
+    [officers, q]
   )
+
+  const handleSearch = (val) => {
+    setQ(val)
+    setVisible(PAGE_SIZE)
+  }
+
+  const paginated = approved.slice(0, visible)
+  const hasMore   = visible < approved.length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -45,9 +203,16 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit, onD
         <div style={{ padding: '14px 18px', borderBottom: `1px solid ${P.border}` }}>
           <div style={{ position: 'relative', maxWidth: 300 }}>
             <Search size={13} color={P.muted} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter officers…" className="ati" style={{ paddingLeft: 32, width: '100%' }} />
+            <input
+              value={q}
+              onChange={e => handleSearch(e.target.value)}
+              placeholder="Filter officers…"
+              className="ati"
+              style={{ paddingLeft: 32, width: '100%' }}
+            />
           </div>
         </div>
+
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -58,21 +223,17 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit, onD
               </tr>
             </thead>
             <tbody>
-              {approved.map(o => (
+              {paginated.map(o => (
                 <tr key={o.uid} className="atr" style={{ borderBottom: `1px solid ${P.border}18` }}>
 
-                  {/* Officer name */}
                   <td style={{ padding: '12px 14px', fontSize: 13, color: P.txt }}>{o.displayName || '—'}</td>
 
-                  {/* Email */}
                   <td style={{ padding: '12px 14px', fontSize: 11, color: P.muted, fontFamily: "'JetBrains Mono',monospace" }}>{o.email}</td>
 
-                  {/* Current credits */}
                   <td style={{ padding: '12px 14px' }}>
                     <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 22, color: P.cyan, fontWeight: 700 }}>{o.credits ?? 0}</span>
                   </td>
 
-                  {/* Add credits — input + button */}
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <input
@@ -94,7 +255,6 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit, onD
                     </div>
                   </td>
 
-                  {/* Deduct credits — input + button, same style as Add */}
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <input
@@ -116,7 +276,6 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit, onD
                     </div>
                   </td>
 
-                  {/* Clear credits button */}
                   <td style={{ padding: '12px 14px' }}>
                     <button
                       className="abtn abtn-r"
@@ -135,6 +294,17 @@ export default function CreditsView({ officers, onAddCredit, onDeductCredit, onD
             </tbody>
           </table>
         </div>
+
+        {!q && hasMore && (
+          <div style={{ padding: '14px', textAlign: 'center', borderTop: `1px solid ${P.border}` }}>
+            <button
+              className="abtn abtn-g"
+              onClick={() => setVisible(v => v + PAGE_SIZE)}
+            >
+              Load More Credits
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
