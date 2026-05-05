@@ -526,10 +526,28 @@
 //             </div>
 
 //             <div style={{ display: 'flex', gap: 10 }}>
+//               {/* ── Save Changes button with green hover ── */}
 //               <button
-//                 className="abtn abtn-g"
-//                 style={{ flex: 1, fontWeight: 700, color: P.txt}}
+//                 className="abtn"
+//                 style={{
+//                   flex: 1,
+//                   fontWeight: 700,
+//                   color: P.txt,
+//                   background: 'transparent',
+//                   border: `1px solid ${P.border}`,
+//                   transition: 'border-color 0.2s, box-shadow 0.2s, color 0.2s',
+//                 }}
 //                 disabled={isSaving}
+//                 onMouseEnter={e => {
+//                   e.currentTarget.style.borderColor = P.green
+//                   e.currentTarget.style.boxShadow = `0 0 8px ${P.green}55`
+//                   e.currentTarget.style.color = P.green
+//                 }}
+//                 onMouseLeave={e => {
+//                   e.currentTarget.style.borderColor = P.border
+//                   e.currentTarget.style.boxShadow = 'none'
+//                   e.currentTarget.style.color = P.txt
+//                 }}
 //                 onClick={async () => {
 //                   setIsSaving(true)
 //                   try {
@@ -547,11 +565,11 @@
 //                 className="abtn"
 //                 style={{
 //                   flex: 1,
+//                   fontWeight: 700,
+//                   color: P.txt,
 //                   background: 'transparent',
 //                   border: `1px solid ${P.border}`,
-//                   color: P.txt,
-// fontWeight: 700,
-// transition: 'border-color 0.2s, box-shadow 0.2s, color 0.2s',
+//                   transition: 'border-color 0.2s, box-shadow 0.2s, color 0.2s',
 //                 }}
 //                 onMouseEnter={e => {
 //                   e.currentTarget.style.borderColor = P.red
@@ -583,7 +601,7 @@
 //   )
 // }
 import { useState, useEffect, useRef } from 'react'
-import { Search, CheckCircle2, XCircle, Plus, Minus, Trash2, FileText, Users, Edit } from 'lucide-react'
+import { Search, CheckCircle2, XCircle, Plus, Minus, Trash2, FileText, Users, Edit, UserPlus } from 'lucide-react'
 import { SBadge } from '../components/UI.jsx'
 import { P } from '../styles/theme.js'
 
@@ -920,7 +938,7 @@ function generatePDF(officers, links) {
 // =============================================================================
 // COMPONENT
 // =============================================================================
-export default function OfficersView({ officers, links, onApprove, onReject, onAddCredit, onDeductCredit, onUpdateOfficer, onDelete, onLoadMore, hasMore, loadingMore, highlightUid }) {
+export default function OfficersView({ officers, links, onApprove, onReject, onAddCredit, onDeductCredit, onUpdateOfficer, onDelete, onAddOfficer, onLoadMore, hasMore, loadingMore, highlightUid }) {
   const [q, setQ] = useState('')
   const [amt, setAmt] = useState({})
   const [selected, setSelected] = useState(new Set())
@@ -930,6 +948,14 @@ export default function OfficersView({ officers, links, onApprove, onReject, onA
   const [editName, setEditName] = useState('')
   const [editEmail, setEditEmail] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+
+  // ── Add Officer state ──────────────────────────────────────────────────────
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [newBadgeId, setNewBadgeId] = useState('')
+  const [newCredits, setNewCredits] = useState(0)
+  const [isAdding, setIsAdding] = useState(false)
 
   useEffect(() => {
     if (highlightUid && highlightRef.current) {
@@ -956,6 +982,22 @@ export default function OfficersView({ officers, links, onApprove, onReject, onA
     downloadFile(csv, `all_officers_report_${date}.csv`)
   }
 
+  const handleAddOfficer = async () => {
+    if (!newName.trim() || !newEmail.trim()) return
+    setIsAdding(true)
+    try {
+      await onAddOfficer({
+        displayName: newName.trim(),
+        email: newEmail.trim(),
+        badgeId: newBadgeId.trim(),
+        credits: newCredits,
+      })
+      setShowAddModal(false)
+      setNewName(''); setNewEmail(''); setNewBadgeId(''); setNewCredits(0)
+    } catch (e) {}
+    setIsAdding(false)
+  }
+
   return (
     <div className="atc" style={{ overflow: 'hidden' }}>
 
@@ -967,6 +1009,19 @@ export default function OfficersView({ officers, links, onApprove, onReject, onA
         </div>
         <span style={{ fontSize: 11, color: P.muted, fontFamily: "'JetBrains Mono',monospace", marginRight: 'auto' }}>{rows.length} results</span>
         <div style={{ display: 'flex', gap: 8 }}>
+          {/* ── Add Officer button ── */}
+          <button
+            className="abtn abtn-c"
+            style={{ padding: '6px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={() => {
+              setNewName(''); setNewEmail(''); setNewBadgeId(''); setNewCredits(0)
+              setShowAddModal(true)
+            }}
+            title="Manually add a new officer"
+          >
+            <UserPlus size={13} /> Add Officer
+          </button>
+
           <button
             className="abtn abtn-p"
             style={{ padding: '6px 14px', fontSize: 12, opacity: selected.size === 0 ? 0.45 : 1, cursor: selected.size === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
@@ -1093,7 +1148,7 @@ export default function OfficersView({ officers, links, onApprove, onReject, onA
         </table>
       </div>
 
-      {/* Edit Modal */}
+      {/* Edit Officer Modal */}
       {editOfficer && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: 20 }}>
           <div className="atc" style={{ width: '100%', maxWidth: 400, padding: 24, border: `1px solid ${P.border}` }}>
@@ -1110,28 +1165,12 @@ export default function OfficersView({ officers, links, onApprove, onReject, onA
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
-              {/* ── Save Changes button with green hover ── */}
               <button
                 className="abtn"
-                style={{
-                  flex: 1,
-                  fontWeight: 700,
-                  color: P.txt,
-                  background: 'transparent',
-                  border: `1px solid ${P.border}`,
-                  transition: 'border-color 0.2s, box-shadow 0.2s, color 0.2s',
-                }}
+                style={{ flex: 1, fontWeight: 700, color: P.txt, background: 'transparent', border: `1px solid ${P.border}`, transition: 'border-color 0.2s, box-shadow 0.2s, color 0.2s' }}
                 disabled={isSaving}
-                onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = P.green
-                  e.currentTarget.style.boxShadow = `0 0 8px ${P.green}55`
-                  e.currentTarget.style.color = P.green
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = P.border
-                  e.currentTarget.style.boxShadow = 'none'
-                  e.currentTarget.style.color = P.txt
-                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = P.green; e.currentTarget.style.boxShadow = `0 0 8px ${P.green}55`; e.currentTarget.style.color = P.green }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = P.border; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.color = P.txt }}
                 onClick={async () => {
                   setIsSaving(true)
                   try {
@@ -1144,28 +1183,106 @@ export default function OfficersView({ officers, links, onApprove, onReject, onA
                 {isSaving ? 'Saving...' : 'Save Changes'}
               </button>
 
-              {/* ── Cancel button with red hover ── */}
+              <button
+                className="abtn"
+                style={{ flex: 1, fontWeight: 700, color: P.txt, background: 'transparent', border: `1px solid ${P.border}`, transition: 'border-color 0.2s, box-shadow 0.2s, color 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = P.red; e.currentTarget.style.boxShadow = `0 0 8px ${P.red}55`; e.currentTarget.style.color = P.red }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = P.border; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.color = P.txt }}
+                onClick={() => setEditOfficer(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Officer Modal */}
+      {showAddModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: 20 }}>
+          <div className="atc" style={{ width: '100%', maxWidth: 420, padding: 24, border: `1px solid ${P.border}` }}>
+            <h3 style={{ fontFamily: "'Bebas Neue',cursive", fontSize: 22, color: P.txt, margin: '0 0 6px', letterSpacing: 1 }}>Add New Officer</h3>
+            <p style={{ fontSize: 11, color: P.muted, marginBottom: 20 }}>Manually register an officer. They will be approved by default.</p>
+
+            <div style={{ marginBottom: 15 }}>
+              <label style={{ display: 'block', fontSize: 10, color: P.muted, textTransform: 'uppercase', marginBottom: 5 }}>Full Name <span style={{ color: P.red }}>*</span></label>
+              <input
+                className="ati"
+                style={{ width: '100%' }}
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                placeholder="e.g. Pranav S Shetty"
+              />
+            </div>
+
+            <div style={{ marginBottom: 15 }}>
+              <label style={{ display: 'block', fontSize: 10, color: P.muted, textTransform: 'uppercase', marginBottom: 5 }}>Email Address <span style={{ color: P.red }}>*</span></label>
+              <input
+                className="ati"
+                style={{ width: '100%' }}
+                value={newEmail}
+                onChange={e => setNewEmail(e.target.value)}
+                placeholder="e.g. officer@example.com"
+              />
+            </div>
+
+            <div style={{ marginBottom: 15 }}>
+              <label style={{ display: 'block', fontSize: 10, color: P.muted, textTransform: 'uppercase', marginBottom: 5 }}>Badge ID</label>
+              <input
+                className="ati"
+                style={{ width: '100%' }}
+                value={newBadgeId}
+                onChange={e => setNewBadgeId(e.target.value)}
+                placeholder="e.g. KA-2024-103"
+              />
+            </div>
+
+            <div style={{ marginBottom: 25 }}>
+              <label style={{ display: 'block', fontSize: 10, color: P.muted, textTransform: 'uppercase', marginBottom: 5 }}>Starting Credits</label>
+              <input
+                type="number"
+                min="0"
+                className="ati"
+                style={{ width: '100%' }}
+                value={newCredits}
+                onChange={e => setNewCredits(Number(e.target.value))}
+                placeholder="0"
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
               <button
                 className="abtn"
                 style={{
-                  flex: 1,
-                  fontWeight: 700,
-                  color: P.txt,
-                  background: 'transparent',
-                  border: `1px solid ${P.border}`,
+                  flex: 1, fontWeight: 700, color: P.txt,
+                  background: 'transparent', border: `1px solid ${P.border}`,
                   transition: 'border-color 0.2s, box-shadow 0.2s, color 0.2s',
+                  opacity: (!newName.trim() || !newEmail.trim()) ? 0.45 : 1,
+                  cursor: (!newName.trim() || !newEmail.trim()) ? 'not-allowed' : 'pointer',
                 }}
+                disabled={isAdding || !newName.trim() || !newEmail.trim()}
                 onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = P.red
-                  e.currentTarget.style.boxShadow = `0 0 8px ${P.red}55`
-                  e.currentTarget.style.color = P.red
+                  if (!newName.trim() || !newEmail.trim()) return
+                  e.currentTarget.style.borderColor = P.green
+                  e.currentTarget.style.boxShadow = `0 0 8px ${P.green}55`
+                  e.currentTarget.style.color = P.green
                 }}
                 onMouseLeave={e => {
                   e.currentTarget.style.borderColor = P.border
                   e.currentTarget.style.boxShadow = 'none'
                   e.currentTarget.style.color = P.txt
                 }}
-                onClick={() => setEditOfficer(null)}
+                onClick={handleAddOfficer}
+              >
+                {isAdding ? 'Adding...' : 'Add Officer'}
+              </button>
+
+              <button
+                className="abtn"
+                style={{ flex: 1, fontWeight: 700, color: P.txt, background: 'transparent', border: `1px solid ${P.border}`, transition: 'border-color 0.2s, box-shadow 0.2s, color 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = P.red; e.currentTarget.style.boxShadow = `0 0 8px ${P.red}55`; e.currentTarget.style.color = P.red }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = P.border; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.color = P.txt }}
+                onClick={() => setShowAddModal(false)}
               >
                 Cancel
               </button>
