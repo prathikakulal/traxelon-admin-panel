@@ -676,14 +676,14 @@ router.delete('/activity/:uid/:sid/:type', async (c) => {
     
     await Promise.all(paths.map(async p => {
       const parts = p.split('/')
-      if (parts.length === 3) {
-        await db.collection(parts[0]).doc(parts[1]).collection(parts[2]).doc(parts[3] || '').delete().catch(() => {})
-      } else {
-        await db.collection(parts[0]).doc(parts[1]).delete().catch(() => {})
+      if (parts.length >= 2) {
+        const collectionPath = parts.slice(0, -1).join('/')
+        const docId = parts[parts.length - 1]
+        await db.collection(collectionPath).doc(docId).delete().catch(() => {})
       }
     }))
 
-    await db.collection('users').doc(uid).collection('sessions').doc(sid).delete().catch(() => {})
+    await db.collection(`users/${uid}/sessions`).doc(sid).delete().catch(() => {})
     
     return c.json({ success: true })
   } catch (err) {

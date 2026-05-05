@@ -3563,15 +3563,14 @@ router.delete("/activity/:uid/:sid/:type", async (c) => {
     ];
     await Promise.all(paths.map(async (p) => {
       const parts = p.split("/");
-      if (parts.length === 3) {
-        await db.collection(parts[0]).doc(parts[1]).collection(parts[2]).doc(parts[3] || "").delete().catch(() => {
-        });
-      } else {
-        await db.collection(parts[0]).doc(parts[1]).delete().catch(() => {
+      if (parts.length >= 2) {
+        const collectionPath = parts.slice(0, -1).join("/");
+        const docId = parts[parts.length - 1];
+        await db.collection(collectionPath).doc(docId).delete().catch(() => {
         });
       }
     }));
-    await db.collection("users").doc(uid).collection("sessions").doc(sid).delete().catch(() => {
+    await db.collection(`users/${uid}/sessions`).doc(sid).delete().catch(() => {
     });
     return c.json({ success: true });
   } catch (err) {
@@ -3957,7 +3956,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env2, _ctx, middlewareCtx
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-pfMr8X/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-WAPZWg/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -3989,7 +3988,7 @@ function __facade_invoke__(request, env2, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-pfMr8X/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-WAPZWg/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

@@ -15,6 +15,7 @@ export default function ActivityView() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
+  const [selectedLogs, setSelectedLogs] = useState([])
 
   const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'
 
@@ -67,8 +68,29 @@ export default function ActivityView() {
       await fetchWithAuth(`/api/admin/activity/${uid}/${sessionId}/${type}`, { method: 'DELETE' })
 
       setLogs(prev => prev.filter(l => l.id !== eventId))
+      setSelectedLogs(prev => prev.filter(id => id !== eventId))
     } catch (err) {
       console.error('Delete failed:', err.message)
+      alert('Delete failed: ' + err.message)
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (!window.confirm(`Delete ${selectedLogs.length} selected logs?`)) return
+    try {
+      await Promise.all(selectedLogs.map(eventId => {
+        const log = logs.find(l => l.id === eventId)
+        if (!log) return Promise.resolve()
+        const type = eventId.endsWith('-login') ? 'login' : 'logout'
+        const sessionId = eventId.replace(`-${type}`, '')
+        return fetchWithAuth(`/api/admin/activity/${log.uid}/${sessionId}/${type}`, { method: 'DELETE' })
+      }))
+      
+      setLogs(prev => prev.filter(l => !selectedLogs.includes(l.id)))
+      setSelectedLogs([])
+    } catch (err) {
+      console.error('Batch delete failed:', err.message)
+      alert('Batch delete failed: ' + err.message)
     }
   }
 
@@ -90,6 +112,11 @@ export default function ActivityView() {
             {f.toUpperCase()}
           </button>
         ))}
+        {selectedLogs.length > 0 && (
+          <button className="abtn" onClick={handleDeleteSelected} style={{ padding: '6px 12px', fontSize: 12, backgroundColor: `${P.red}20`, color: P.red, border: `1px solid ${P.red}40`, marginLeft: 10 }}>
+            <Trash2 size={12} /> Delete Selected ({selectedLogs.length})
+          </button>
+        )}
         <span style={{ fontSize: 11, color: P.muted, fontFamily: "'JetBrains Mono',monospace", marginLeft: 'auto' }}>{filtered.length} events</span>
       </div>
 
@@ -98,14 +125,44 @@ export default function ActivityView() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${P.border}` }}>
-                {['Event', 'Officer', 'Email', 'Date & Time', ''].map(h => (
+                <th style={{ padding: '10px 14px', width: 40, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && filtered.every(l => selectedLogs.includes(l.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const newSelected = new Set(selectedLogs)
+                        filtered.forEach(l => newSelected.add(l.id))
+                        setSelectedLogs(Array.from(newSelected))
+                      } else {
+                        const filteredIds = new Set(filtered.map(l => l.id))
+                        setSelectedLogs(selectedLogs.filter(id => !filteredIds.has(id)))
+                      }
+                    }}
+                    style={{ accentColor: P.cyan, cursor: 'pointer' }}
+                  />
+                </th>
+                {['Event', 'Officer', 'Email', 'Date & Time', 'Actions'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, color: P.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map(log => (
-                <tr key={log.id} className="atr" style={{ borderBottom: `1px solid ${P.border}18` }}>
+              {filtered.map(log => {
+                const isSelected = selectedLogs.includes(log.id)
+                return (
+                <tr key={log.id} className="atr" style={{ borderBottom: `1px solid ${P.border}18`, backgroundColor: isSelected ? `${P.cyan}10` : 'transparent' }}>
+                  <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedLogs(prev => [...prev, log.id])
+                        else setSelectedLogs(prev => prev.filter(id => id !== log.id))
+                      }}
+                      style={{ accentColor: P.cyan, cursor: 'pointer' }}
+                    />
+                  </td>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: log.type === 'login' ? P.green : P.red, boxShadow: `0 0 6px ${log.type === 'login' ? P.green : P.red}` }} />
@@ -131,12 +188,12 @@ export default function ActivityView() {
                     </button>
                   </td>
                 </tr>
-              ))}
+              )})}
               {loading && (
-                <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: P.cyan, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>Loading sessions...</td></tr>
+                <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.cyan, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>Loading sessions...</td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No activity logs found</td></tr>
+                <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No activity logs found</td></tr>
               )}
             </tbody>
           </table>
