@@ -196,6 +196,7 @@ export default function CouponsView({ showToast }) {
   const [loading, setLoading]   = useState(false)
   const [copied, setCopied]     = useState(null)
   const [limitCount, setLimitCount] = useState(20)
+  const [selectedCoupons, setSelectedCoupons] = useState([])
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -247,8 +248,23 @@ export default function CouponsView({ showToast }) {
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this coupon permanently?')) return
-    try { await deleteDoc(doc(db, 'coupons', id)); showToast('Coupon deleted') }
+    try { 
+      await deleteDoc(doc(db, 'coupons', id))
+      showToast('Coupon deleted')
+      setSelectedCoupons(prev => prev.filter(sId => sId !== id))
+    }
     catch (e) { showToast(e.message, false) }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (!window.confirm(`Delete ${selectedCoupons.length} selected coupons permanently?`)) return
+    try {
+      await Promise.all(selectedCoupons.map(id => deleteDoc(doc(db, 'coupons', id))))
+      showToast(`Deleted ${selectedCoupons.length} coupons`)
+      setSelectedCoupons([])
+    } catch (e) {
+      showToast(e.message, false)
+    }
   }
 
   const handleCopy = (code) => {
@@ -308,13 +324,31 @@ export default function CouponsView({ showToast }) {
 
       <div className="atc" style={{ overflow: 'hidden' }}>
         <div style={{ padding: '14px 18px', borderBottom: `1px solid ${P.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontFamily: "'Bebas Neue',cursive", fontSize: 16, color: P.txt, letterSpacing: 1 }}>ALL COUPONS</span>
-          <span style={{ fontSize: 11, color: P.muted, fontFamily: "'JetBrains Mono',monospace" }}>{coupons.length} total</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontFamily: "'Bebas Neue',cursive", fontSize: 16, color: P.txt, letterSpacing: 1 }}>ALL COUPONS</span>
+            <span style={{ fontSize: 11, color: P.muted, fontFamily: "'JetBrains Mono',monospace" }}>{coupons.length} total</span>
+          </div>
+          {selectedCoupons.length > 0 && (
+            <button className="abtn" onClick={handleDeleteSelected} style={{ padding: '6px 12px', fontSize: 12, backgroundColor: `${P.red}20`, color: P.red, border: `1px solid ${P.red}40` }}>
+              <Trash2 size={12} /> Delete Selected ({selectedCoupons.length})
+            </button>
+          )}
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${P.border}` }}>
+                <th style={{ padding: '10px 14px', width: 40, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={coupons.length > 0 && selectedCoupons.length === coupons.length}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedCoupons(coupons.map(c => c.id))
+                      else setSelectedCoupons([])
+                    }}
+                    style={{ accentColor: P.cyan, cursor: 'pointer' }}
+                  />
+                </th>
                 {['Code', 'Discount', 'Used / Max', 'Status', 'Expires', 'Used By', 'Created', 'Actions'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, color: P.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -323,8 +357,20 @@ export default function CouponsView({ showToast }) {
             <tbody>
               {coupons.map(c => {
                 const status = getCouponStatus(c)
+                const isSelected = selectedCoupons.includes(c.id)
                 return (
-                  <tr key={c.id} className="atr" style={{ borderBottom: `1px solid ${P.border}18` }}>
+                  <tr key={c.id} className="atr" style={{ borderBottom: `1px solid ${P.border}18`, backgroundColor: isSelected ? `${P.cyan}10` : 'transparent' }}>
+                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedCoupons(prev => [...prev, c.id])
+                          else setSelectedCoupons(prev => prev.filter(id => id !== c.id))
+                        }}
+                        style={{ accentColor: P.cyan, cursor: 'pointer' }}
+                      />
+                    </td>
                     <td style={{ padding: '12px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, color: P.cyan, fontWeight: 700 }}>{c.code}</span>
@@ -369,7 +415,7 @@ export default function CouponsView({ showToast }) {
                 )
               })}
               {coupons.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No coupons yet. Create your first one above.</td></tr>
+                <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No coupons yet. Create your first one above.</td></tr>
               )}
             </tbody>
           </table>

@@ -37,6 +37,7 @@ export default function VouchersView({ showToast }) {
   const [preview, setPreview]   = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [copied, setCopied]     = useState(null)
+  const [selectedVouchers, setSelectedVouchers] = useState([])
 
   // ── Fetch ────────────────────────────────────────────────────────────────────
   const fetchVouchers = useCallback(async (isInitial = false) => {
@@ -85,6 +86,19 @@ export default function VouchersView({ showToast }) {
     try {
       await fetchWithAuth(`/api/admin/vouchers/${v.id}`, { method: 'DELETE' })
       showToast('Voucher deleted.')
+      setSelectedVouchers(prev => prev.filter(sId => sId !== v.id))
+      fetchVouchers()
+    } catch (err) {
+      showToast(err.message, false)
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (!window.confirm(`Delete ${selectedVouchers.length} selected vouchers? This cannot be undone.`)) return
+    try {
+      await Promise.all(selectedVouchers.map(id => fetchWithAuth(`/api/admin/vouchers/${id}`, { method: 'DELETE' })))
+      showToast(`Deleted ${selectedVouchers.length} vouchers.`)
+      setSelectedVouchers([])
       fetchVouchers()
     } catch (err) {
       showToast(err.message, false)
@@ -164,9 +178,14 @@ export default function VouchersView({ showToast }) {
       {/* ── Vouchers Table ── */}
       <div className="atc" style={{ overflow: 'hidden' }}>
         <div style={{ padding: '14px 18px', borderBottom: `1px solid ${P.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontFamily: "'Bebas Neue',cursive", fontSize: 16, color: P.txt, letterSpacing: 1 }}>ALL VOUCHERS</span>
             <span style={{ fontSize: 11, color: P.muted, fontFamily: "'JetBrains Mono',monospace" }}>{vouchers.length} total</span>
+            {selectedVouchers.length > 0 && (
+              <button className="abtn" onClick={handleDeleteSelected} style={{ padding: '6px 12px', fontSize: 12, backgroundColor: `${P.red}20`, color: P.red, border: `1px solid ${P.red}40` }}>
+                <Trash2 size={12} /> Delete Selected ({selectedVouchers.length})
+              </button>
+            )}
           </div>
           <button className="abtn abtn-g" style={{ padding: '5px 12px', fontSize: 11 }} onClick={() => fetchVouchers(false)} disabled={loading}>
             <RefreshCw size={11} className={loading ? 'spin' : ''} /> Refresh
@@ -182,14 +201,38 @@ export default function VouchersView({ showToast }) {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${P.border}` }}>
+                  <th style={{ padding: '10px 14px', width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={vouchers.length > 0 && selectedVouchers.length === vouchers.length}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedVouchers(vouchers.map(v => v.id))
+                        else setSelectedVouchers([])
+                      }}
+                      style={{ accentColor: P.cyan, cursor: 'pointer' }}
+                    />
+                  </th>
                   {['Status', 'Code', 'Credits', 'Valid From', 'Valid Until', 'Redeemed By', 'Actions'].map(h => (
                     <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, color: P.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {vouchers.map(v => (
-                  <tr key={v.id} className="atr" style={{ borderBottom: `1px solid ${P.border}18` }}>
+                {vouchers.map(v => {
+                  const isSelected = selectedVouchers.includes(v.id)
+                  return (
+                  <tr key={v.id} className="atr" style={{ borderBottom: `1px solid ${P.border}18`, backgroundColor: isSelected ? `${P.cyan}10` : 'transparent' }}>
+                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedVouchers(prev => [...prev, v.id])
+                          else setSelectedVouchers(prev => prev.filter(id => id !== v.id))
+                        }}
+                        style={{ accentColor: P.cyan, cursor: 'pointer' }}
+                      />
+                    </td>
                     <td style={{ padding: '12px 14px' }}><SBadge status={getVoucherStatus(v)} /></td>
                     <td style={{ padding: '12px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -215,10 +258,10 @@ export default function VouchersView({ showToast }) {
                       </button>
                     </td>
                   </tr>
-                ))}
+                )})}
                 {vouchers.length === 0 && (
                   <tr>
-                    <td colSpan={7} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
+                    <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: P.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
                       No vouchers yet. Create your first one above.
                     </td>
                   </tr>
