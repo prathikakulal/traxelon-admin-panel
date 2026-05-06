@@ -999,10 +999,11 @@ import {
 } from 'lucide-react'
 import { db, auth } from '../firebase/config.js'
 import {
-  doc, updateDoc, deleteDoc, increment,
+  doc, updateDoc, deleteDoc, increment, setDoc, serverTimestamp,
   onSnapshot, query, collection, orderBy, limit
 } from 'firebase/firestore'
-import { signOut } from 'firebase/auth'
+import { signOut, getAuth, createUserWithEmailAndPassword, signOut as signOutSecondary } from 'firebase/auth'
+import { initializeApp } from 'firebase/app'
 
 const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'
 import { Toast } from '../components/UI.jsx'
@@ -1182,6 +1183,42 @@ export default function AdminPage() {
     } catch (e) { showToast(e.message, false) }
   }
 
+  const handleAddOfficer = async (data) => {
+    try {
+      const fbConfig = {
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: import.meta.env.VITE_FIREBASE_APP_ID,
+      }
+      
+      const secondaryApp = initializeApp(fbConfig, 'SecondaryApp' + Date.now())
+      const secondaryAuth = getAuth(secondaryApp)
+      
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, data.email, 'password123')
+      await signOutSecondary(secondaryAuth)
+      
+      const newUid = cred.user.uid
+      
+      await setDoc(doc(db, 'users', newUid), {
+        email: data.email,
+        displayName: data.displayName || '',
+        badgeId: data.badgeId || '',
+        credits: data.credits || 0,
+        status: 'approved',
+        creditGranted: true,
+        createdAt: serverTimestamp(),
+        lastSeen: serverTimestamp()
+      })
+      
+      showToast('Officer manually created! (Temp pass: password123)')
+    } catch (e) {
+      showToast(e.message, false)
+    }
+  }
+
   const handleLogout = async () => {
     try { await auth.signOut() } catch (e) { }
     logout()
@@ -1301,7 +1338,7 @@ export default function AdminPage() {
       }}
       setTab={handleSetTab}
     />,
-    officers: <OfficersView officers={officers} links={enrichedLinks} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onUpdateOfficer={handleUpdateOfficer} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} />,
+    officers: <OfficersView officers={officers} links={enrichedLinks} onApprove={handleApprove} onReject={handleReject} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onUpdateOfficer={handleUpdateOfficer} onDelete={handleDelete} onLoadMore={loadMoreOfficers} hasMore={hasMoreOfficers} loadingMore={loadingMore} highlightUid={highlightUid} onAddOfficer={handleAddOfficer} />,
     links:    <LinksView links={enrichedLinks} onLoadMore={loadMoreLinks} hasMore={hasMoreLinks} loadingMore={loadingMore} onOfficerClick={(uid) => { setHighlightUid(uid); setTab('officers') }} onFetchCaptures={fetchCaptures} />,
     credits:  <CreditsView officers={officers} onAddCredit={handleAddCredit} onDeductCredit={handleDeductCredit} onDelete={handleDelete} />,
     coupons:  <CouponsView showToast={showToast} />,
