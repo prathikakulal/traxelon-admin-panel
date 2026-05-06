@@ -1197,7 +1197,10 @@ export default function AdminPage() {
       const secondaryApp = initializeApp(fbConfig, 'SecondaryApp' + Date.now())
       const secondaryAuth = getAuth(secondaryApp)
       
-      const cred = await createUserWithEmailAndPassword(secondaryAuth, data.email, 'password123')
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+      const tempPass = Array.from({length: 12}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, data.email, tempPass)
       await signOutSecondary(secondaryAuth)
       
       const newUid = cred.user.uid
@@ -1213,7 +1216,7 @@ export default function AdminPage() {
         lastSeen: serverTimestamp()
       })
       
-      showToast('Officer manually created! (Temp pass: password123)')
+      showToast(`Officer manually created! (Temp pass: ${tempPass})`)
     } catch (e) {
       showToast(e.message, false)
     }
